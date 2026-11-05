@@ -1,0 +1,615 @@
+[
+  {
+    "id": "a9c581e7f0db2001",
+    "type": "tab",
+    "label": "PlantCare - Sensor Data TEST",
+    "disabled": false,
+    "info": "PlantCare IoT test flow. Uses simulated sensor data only. No MQTT connection, no InfluxDB writes, and no public HTTP endpoint."
+  },
+  {
+    "id": "a9c581e7f0db2002",
+    "type": "inject",
+    "z": "a9c581e7f0db2001",
+    "name": "TEST - Soil Sensor",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "plantcare/ait/plant01/esp32_01/soil",
+    "payload": "{\"plant_id\":\"plant01\",\"device_id\":\"esp32_01\",\"soil_adc_raw\":2514,\"soil_adc_filtered\":2514.0,\"relative_wetness_pct\":29.4,\"soil_status\":\"intermediate_observed_range\",\"reference_before_water_adc\":2614,\"reference_after_water_adc\":2274,\"calibration_method\":\"observed_before_after_mean\",\"calibrated_absolute_moisture\":false,\"data_source\":\"simulated\"}",
+    "payloadType": "json",
+    "x": 390,
+    "y": 180,
+    "wires": [
+      [
+        "a9c581e7f0db2005"
+      ]
+    ]
+  },
+  {
+    "id": "a9c581e7f0db2003",
+    "type": "inject",
+    "z": "a9c581e7f0db2001",
+    "name": "TEST - Thermal Sensor",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "plantcare/ait/plant01/esp32_01/thermal",
+    "payload": "{\"plant_id\":\"plant01\",\"device_id\":\"esp32_01\",\"t_left_c\":27.3,\"t_right_c\":28.6,\"t_max_c\":29.7,\"delta_t_c\":1.3,\"data_source\":\"simulated\"}",
+    "payloadType": "json",
+    "x": 390,
+    "y": 240,
+    "wires": [
+      [
+        "a9c581e7f0db2005"
+      ]
+    ]
+  },
+  {
+    "id": "a9c581e7f0db2004",
+    "type": "inject",
+    "z": "a9c581e7f0db2001",
+    "name": "TEST - Device Status",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "plantcare/ait/plant01/esp32_01/status",
+    "payload": "{\"plant_id\":\"plant01\",\"device_id\":\"esp32_01\",\"device_status\":\"online\",\"soil_sensor_ok\":true,\"thermal_sensor_ok\":true,\"uptime_ms\":123456,\"data_source\":\"simulated\"}",
+    "payloadType": "json",
+    "x": 390,
+    "y": 300,
+    "wires": [
+      [
+        "a9c581e7f0db2005"
+      ]
+    ]
+  },
+  {
+    "id": "a9c581e7f0db2005",
+    "type": "function",
+    "z": "a9c581e7f0db2001",
+    "name": "Validate PlantCare JSON",
+    "func": "//-- 1. กำหนด Topic ที่ระบบ PlantCare ยอมรับ\nconst topics = {\n    'plantcare/ait/plant01/esp32_01/soil': 0,\n    'plantcare/ait/plant01/esp32_01/thermal': 1,\n    'plantcare/ait/plant01/esp32_01/status': 2\n};\n\n//-- 2. เตรียม Output จำนวน 4 ช่อง: Soil, Thermal, Status, Error\nconst outputs = [null, null, null, null];\n\n//-- 3. ฟังก์ชันรายงานข้อผิดพลาด\nfunction reject(reason) {\n    node.warn('PlantCare validation: ' + reason);\n    outputs[3] = {\n        topic: msg.topic,\n        payload: { error: reason, data_source: 'simulated' }\n    };\n    return outputs;\n}\n\n//-- 4. ตรวจ Topic เพื่อไม่ให้ข้อมูลจาก Lab อื่นปะปน\nif (!Object.prototype.hasOwnProperty.call(topics, msg.topic)) {\n    return reject('Unknown PlantCare topic');\n}\n\n//-- 5. ตรวจรูปแบบ JSON Object\nconst p = msg.payload;\nif (p === null || typeof p !== 'object' || Array.isArray(p)) {\n    return reject('Payload must be a JSON object');\n}\n\n//-- 6. ตรวจชื่ออุปกรณ์และแหล่งที่มาของข้อมูล\nif (p.plant_id !== 'plant01' || p.device_id !== 'esp32_01') {\n    return reject('Unexpected plant_id or device_id');\n}\nif (p.data_source !== 'simulated' && p.data_source !== 'real') {\n    return reject('Invalid data_source');\n}\n\n//-- 7. ตรวจค่า Soil ให้เป็นตัวเลขที่สมเหตุสมผล\nif (msg.topic.endsWith('/soil')) {\n    if (!Number.isFinite(p.soil_adc_raw) || p.soil_adc_raw < 0 || p.soil_adc_raw > 4095 || !Number.isFinite(p.relative_wetness_pct) || p.relative_wetness_pct < 0 || p.relative_wetness_pct > 100) {\n        return reject('Invalid Soil ADC or Wetness Index');\n    }\n}\n\n//-- 8. ตรวจ Thermal Summary ว่ามีตัวเลขครบ\nif (msg.topic.endsWith('/thermal')) {\n    for (const field of ['t_left_c', 't_right_c', 't_max_c', 'delta_t_c']) {\n        if (!Number.isFinite(p[field])) {\n            return reject('Invalid Thermal field: ' + field);\n        }\n    }\n}\n\n//-- 9. ตรวจสถานะ Sensor\nif (msg.topic.endsWith('/status')) {\n    if (typeof p.soil_sensor_ok !== 'boolean' || typeof p.thermal_sensor_ok !== 'boolean') {\n        return reject('Invalid sensor status flags');\n    }\n}\n\n//-- 10. เพิ่มเวลารับข้อมูลที่ Node-RED\n// สำหรับ Inject Test ใช้เวลาปัจจุบันเป็นเวลาของตัวอย่าง\n// ข้อมูลจาก ESP32 จริงควรมีเวลาวัดจากอุปกรณ์แยกต่างหาก\nconst now = new Date().toISOString();\nmsg.payload = {\n    ...p,\n    schema_version: 2,\n    timestamp: p.timestamp || now,\n    received_at: now\n};\n\n//-- 11. ส่งไปยัง Debug ตามประเภทของข้อมูล\noutputs[topics[msg.topic]] = msg;\nreturn outputs;",
+    "outputs": 4,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 780,
+    "y": 240,
+    "wires": [
+      [
+        "a9c581e7f0db2006"
+      ],
+      [
+        "a9c581e7f0db2007"
+      ],
+      [
+        "a9c581e7f0db2008"
+      ],
+      [
+        "a9c581e7f0db2009"
+      ]
+    ]
+  },
+  {
+    "id": "a9c581e7f0db2006",
+    "type": "debug",
+    "z": "a9c581e7f0db2001",
+    "name": "SOIL - Valid JSON",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1085,
+    "y": 150,
+    "wires": []
+  },
+  {
+    "id": "a9c581e7f0db2007",
+    "type": "debug",
+    "z": "a9c581e7f0db2001",
+    "name": "THERMAL - Valid JSON",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 1085,
+    "y": 210,
+    "wires": []
+  },
+  {
+    "id": "a9c581e7f0db2008",
+    "type": "debug",
+    "z": "a9c581e7f0db2001",
+    "name": "STATUS - Valid JSON",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1085,
+    "y": 270,
+    "wires": []
+  },
+  {
+    "id": "a9c581e7f0db2009",
+    "type": "debug",
+    "z": "a9c581e7f0db2001",
+    "name": "ERROR - Invalid Data",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 1085,
+    "y": 330,
+    "wires": []
+  },
+  {
+    "id": "a9c581e7f0db2010",
+    "type": "comment",
+    "z": "a9c581e7f0db2001",
+    "name": "TEST ONLY - simulated data, no database writes",
+    "info": "Click an Inject node to test each payload. This flow does not connect to an MQTT broker and does not write to InfluxDB. Use data_source=simulated for all test records.",
+    "x": 610,
+    "y": 100,
+    "wires": []
+  },
+  {
+    "id": "ed65505d0f5b0009",
+    "type": "debug",
+    "z": "a9c581e7f0db2001",
+    "name": "MQTT - Raw Messages",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 430,
+    "y": 460,
+    "wires": []
+  },
+  {
+    "id": "63afb1b275d5fdf1",
+    "type": "inject",
+    "z": "a9c581e7f0db2001",
+    "name": "TEST - InfluxDB Health",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "requestTimeout",
+        "v": "5000",
+        "vt": "num"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 740,
+    "y": 480,
+    "wires": [
+      [
+        "58bdfd41717d072d",
+        "038c569bc30fed69"
+      ]
+    ]
+  },
+  {
+    "id": "58bdfd41717d072d",
+    "type": "http request",
+    "z": "a9c581e7f0db2001",
+    "name": "Check InfluxDB Health",
+    "method": "GET",
+    "ret": "txt",
+    "paytoqs": "ignore",
+    "url": "http://influxdb.example.invalid:8086/health",
+    "tls": "",
+    "persist": false,
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 980,
+    "y": 480,
+    "wires": [
+      [
+        "ea42f84f8182db90"
+      ]
+    ]
+  },
+  {
+    "id": "ea42f84f8182db90",
+    "type": "debug",
+    "z": "a9c581e7f0db2001",
+    "name": "InfluxDB - Health Result",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1230,
+    "y": 480,
+    "wires": []
+  },
+  {
+    "id": "038c569bc30fed69",
+    "type": "debug",
+    "z": "a9c581e7f0db2001",
+    "name": "Debug Before Request",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1010,
+    "y": 540,
+    "wires": []
+  },
+  {
+    "id": "089c128a8fd2fa8a",
+    "type": "catch",
+    "z": "a9c581e7f0db2001",
+    "name": "",
+    "scope": null,
+    "uncaught": false,
+    "x": 860,
+    "y": 400,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "06692b99acd3bac7",
+    "type": "mqtt in",
+    "z": "a9c581e7f0db2001",
+    "name": "PlantCare MQTT debug subscriber",
+    "topic": "plantcare/ait/plant01/esp32_01/+",
+    "qos": "0",
+    "datatype": "auto-detect",
+    "broker": "56471152163bd5cc",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 130,
+    "y": 460,
+    "wires": [
+      [
+        "ed65505d0f5b0009"
+      ]
+    ]
+  },
+  {
+    "id": "565b83883a8b81b4",
+    "type": "http in",
+    "z": "a9c581e7f0db2001",
+    "name": "PlantCare - HTTPS Ingest",
+    "url": "/plantcare/ingest",
+    "method": "post",
+    "upload": false,
+    "skipBodyParsing": false,
+    "swaggerDoc": "",
+    "x": 170,
+    "y": 600,
+    "wires": [
+      [
+        "51b5bf70b216ca73"
+      ]
+    ]
+  },
+  {
+    "id": "4eac0e414d6351e8",
+    "type": "http response",
+    "z": "a9c581e7f0db2001",
+    "name": "",
+    "statusCode": "",
+    "headers": {},
+    "x": 750,
+    "y": 620,
+    "wires": []
+  },
+  {
+    "id": "51b5bf70b216ca73",
+    "type": "function",
+    "z": "a9c581e7f0db2001",
+    "name": "PlantCare - Check HTTPS Ingest",
+    "func": "\nconst expectedKey = env.get(\"PLANTCARE_INGEST_KEY\");\nconst suppliedKey = msg.req?.headers?.[\"x-plantcare-key\"];\n\nfunction respond(status, body, soil = null, thermal = null) {\n    msg.statusCode = status;\n    msg.headers = {\n        \"Content-Type\": \"application/json\",\n        \"Cache-Control\": \"no-store\"\n    };\n    msg.payload = body;\n    return [msg, soil, thermal];\n}\n\n// 1. ตรวจ API Key ก่อนอ่านข้อมูล\nif (\n    typeof expectedKey !== \"string\" ||\n    expectedKey.length < 32 ||\n    typeof suppliedKey !== \"string\" ||\n    suppliedKey !== expectedKey\n) {\n    return respond(401, {\n        ok: false,\n        error: \"invalid_api_key\"\n    });\n}\n\n// 2. ตรวจ JSON Body\nlet data;\n\ntry {\n    data = typeof msg.payload === \"string\"\n        ? JSON.parse(msg.payload)\n        : msg.payload;\n} catch (error) {\n    return respond(400, {\n        ok: false,\n        error: \"invalid_json\"\n    });\n}\n\nif (!data || typeof data !== \"object\" || Array.isArray(data)) {\n    return respond(400, {\n        ok: false,\n        error: \"invalid_payload\"\n    });\n}\n\n// 3. ตรวจ Device Metadata\nif (\n    data.plant_id !== \"plant01\" ||\n    data.device_id !== \"esp32_01\" ||\n    ![\"simulated\", \"real\"].includes(data.data_source)\n) {\n    return respond(400, {\n        ok: false,\n        error: \"invalid_metadata\"\n    });\n}\n\nconst tags = {\n    plant_id: data.plant_id,\n    device_id: data.device_id,\n    data_source: data.data_source\n};\n\nconst validNumber = (x) =>\n    typeof x === \"number\" && Number.isFinite(x);\n\nlet soilMsg = null;\nlet thermalMsg = null;\n\n// 4. เตรียมข้อมูล Soil\nif (data.soil !== undefined && data.soil !== null) {\n    const s = data.soil;\n\n    if (\n        typeof s !== \"object\" ||\n        s.sensor_ok !== true ||\n        !validNumber(s.raw) ||\n        !validNumber(s.filtered_raw) ||\n        !validNumber(s.relative_wetness_pct) ||\n        s.raw < 0 || s.raw > 4095 ||\n        s.filtered_raw < 0 || s.filtered_raw > 4095 ||\n        s.relative_wetness_pct < 0 ||\n        s.relative_wetness_pct > 100\n    ) {\n        return respond(400, {\n            ok: false,\n            error: \"invalid_soil\"\n        });\n    }\n\n    soilMsg = {\n        payload: [\n            {\n                soil_adc_raw: s.raw,\n                soil_adc_filtered: s.filtered_raw,\n                relative_wetness_pct: s.relative_wetness_pct\n            },\n            { ...tags }\n        ]\n    };\n}\n\n// 5. เตรียมข้อมูล AMG8833 Thermal\nif (data.thermal !== undefined && data.thermal !== null) {\n    const pixels = data.thermal.pixels;\n\n    if (\n        !Array.isArray(pixels) ||\n        pixels.length !== 64 ||\n        !pixels.every(v =>\n            validNumber(v) && v >= -40 && v <= 125\n        )\n    ) {\n        return respond(400, {\n            ok: false,\n            error: \"invalid_thermal\"\n        });\n    }\n\n    let leftTotal = 0;\n    let rightTotal = 0;\n\n    for (let i = 0; i < 64; i++) {\n        if (i % 8 < 4) {\n            leftTotal += pixels[i];\n        } else {\n            rightTotal += pixels[i];\n        }\n    }\n\n    const left = leftTotal / 32;\n    const right = rightTotal / 32;\n\n    thermalMsg = {\n        payload: [\n            {\n                t_left_c: left,\n                t_right_c: right,\n                t_min_c: Math.min(...pixels),\n                t_max_c: Math.max(...pixels),\n                delta_t_c: Math.abs(left - right)\n            },\n            { ...tags }\n        ]\n    };\n}\n\n// 6. ต้องมีข้อมูลเซนเซอร์อย่างน้อยหนึ่งชนิด\nif (!soilMsg && !thermalMsg) {\n    return respond(400, {\n        ok: false,\n        error: \"no_sensor_data\"\n    });\n}\n\n// 202 หมายถึงรับข้อมูลเพื่อส่งต่อให้ InfluxDB\n// ยังไม่ใช่การยืนยันว่า Database เขียนสำเร็จ\nreturn respond(202, {\n    ok: true,\n    accepted: true,\n    soil: soilMsg !== null,\n    thermal: thermalMsg !== null\n}, soilMsg, thermalMsg);\n",
+    "outputs": 3,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 500,
+    "y": 680,
+    "wires": [
+      [
+        "4eac0e414d6351e8"
+      ],
+      [
+        "e3ba70b676f30575"
+      ],
+      [
+        "08d344d08e5bec0e"
+      ]
+    ]
+  },
+  {
+    "id": "07ba25f4dff5fb75",
+    "type": "inject",
+    "z": "a9c581e7f0db2001",
+    "name": "",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 680,
+    "y": 960,
+    "wires": [
+      [
+        "6751e2dc9ef9bc2b"
+      ]
+    ]
+  },
+  {
+    "id": "eff991f53d4899ef",
+    "type": "inject",
+    "z": "a9c581e7f0db2001",
+    "name": "",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 680,
+    "y": 900,
+    "wires": [
+      [
+        "c1345c9564fd2ee8"
+      ]
+    ]
+  },
+  {
+    "id": "6751e2dc9ef9bc2b",
+    "type": "function",
+    "z": "a9c581e7f0db2001",
+    "name": "function 2",
+    "func": "\nmsg.payload = [\n    {\n        t_left_c: 27.3,\n        t_right_c: 28.6,\n        t_max_c: 29.7,\n        delta_t_c: 1.3\n    },\n    {\n        plant_id: \"plant01\",\n        device_id: \"esp32_01\",\n        data_source: \"simulated\"\n    }\n];\n\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 840,
+    "y": 960,
+    "wires": [
+      [
+        "0a22a697dfc2c92e"
+      ]
+    ]
+  },
+  {
+    "id": "c1345c9564fd2ee8",
+    "type": "function",
+    "z": "a9c581e7f0db2001",
+    "name": "function 1",
+    "func": "\nmsg.payload = [\n    {\n        soil_adc_raw: 2514,\n        soil_adc_filtered: 2514,\n        relative_wetness_pct: 29.4\n    },\n    {\n        plant_id: \"plant01\",\n        device_id: \"esp32_01\",\n        data_source: \"simulated\"\n    }\n];\n\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 840,
+    "y": 900,
+    "wires": [
+      [
+        "d36c4e26b67c9163"
+      ]
+    ]
+  },
+  {
+    "id": "0a22a697dfc2c92e",
+    "type": "influxdb out",
+    "z": "a9c581e7f0db2001",
+    "influxdb": "24d98b8a1863b64d",
+    "name": "InfluxDB thermal output",
+    "measurement": "plantcare_thermal",
+    "precision": "",
+    "retentionPolicy": "",
+    "database": "database",
+    "precisionV18FluxV20": "ms",
+    "retentionPolicyV18Flux": "",
+    "org": "plantcare-org",
+    "bucket": "plantcare",
+    "x": 1130,
+    "y": 960,
+    "wires": []
+  },
+  {
+    "id": "d36c4e26b67c9163",
+    "type": "influxdb out",
+    "z": "a9c581e7f0db2001",
+    "influxdb": "24d98b8a1863b64d",
+    "name": "",
+    "measurement": "plantcare_soil",
+    "precision": "",
+    "retentionPolicy": "",
+    "database": "database",
+    "precisionV18FluxV20": "ms",
+    "retentionPolicyV18Flux": "",
+    "org": "plantcare-org",
+    "bucket": "plantcare",
+    "x": 1170,
+    "y": 900,
+    "wires": []
+  },
+  {
+    "id": "08d344d08e5bec0e",
+    "type": "influxdb out",
+    "z": "a9c581e7f0db2001",
+    "influxdb": "24d98b8a1863b64d",
+    "name": "InfluxDB thermal output",
+    "measurement": "plantcare_thermal",
+    "precision": "",
+    "retentionPolicy": "",
+    "database": "database",
+    "precisionV18FluxV20": "ms",
+    "retentionPolicyV18Flux": "",
+    "org": "plantcare-org",
+    "bucket": "plantcare",
+    "x": 850,
+    "y": 740,
+    "wires": []
+  },
+  {
+    "id": "e3ba70b676f30575",
+    "type": "influxdb out",
+    "z": "a9c581e7f0db2001",
+    "influxdb": "24d98b8a1863b64d",
+    "name": "",
+    "measurement": "plantcare_soil",
+    "precision": "",
+    "retentionPolicy": "",
+    "database": "database",
+    "precisionV18FluxV20": "ms",
+    "retentionPolicyV18Flux": "",
+    "org": "plantcare-org",
+    "bucket": "plantcare",
+    "x": 890,
+    "y": 680,
+    "wires": []
+  },
+  {
+    "id": "56471152163bd5cc",
+    "type": "mqtt-broker",
+    "name": "PlantCare MQTT test broker",
+    "broker": "mqtt.example.invalid",
+    "port": 1883,
+    "autoConnect": false,
+    "usetls": false,
+    "protocolVersion": 4,
+    "keepalive": 60,
+    "cleansession": true,
+    "autoUnsubscribe": true,
+    "birthTopic": "",
+    "birthQos": "0",
+    "birthRetain": "false",
+    "birthPayload": "",
+    "birthMsg": {},
+    "closeTopic": "",
+    "closeQos": "0",
+    "closeRetain": "false",
+    "closePayload": "",
+    "closeMsg": {},
+    "willTopic": "",
+    "willQos": "0",
+    "willRetain": "false",
+    "willPayload": "",
+    "willMsg": {},
+    "userProps": "",
+    "sessionExpiry": ""
+  },
+  {
+    "id": "24d98b8a1863b64d",
+    "type": "influxdb",
+    "hostname": "influxdb.example.invalid",
+    "port": 8086,
+    "protocol": "http",
+    "database": "",
+    "name": "PlantCare Group12 InfluxDB",
+    "usetls": false,
+    "tls": "",
+    "influxdbVersion": "2.0",
+    "url": "http://influxdb.example.invalid:8086",
+    "timeout": 10,
+    "rejectUnauthorized": true
+  },
+  {
+    "id": "c772aa8c2fd22da8",
+    "type": "global-config",
+    "modules": {
+      "node-red-contrib-influxdb": "0.7.0"
+    }
+  }
+]

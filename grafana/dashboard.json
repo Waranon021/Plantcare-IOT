@@ -1,0 +1,1356 @@
+{
+  "apiVersion": "dashboard.grafana.app/v2",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "plantcare-iot"
+  },
+  "spec": {
+    "annotations": [
+      {
+        "kind": "AnnotationQuery",
+        "spec": {
+          "query": {
+            "kind": "DataQuery",
+            "group": "grafana",
+            "version": "v0",
+            "datasource": {
+              "name": "-- Grafana --"
+            },
+            "spec": {}
+          },
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "builtIn": true
+        }
+      }
+    ],
+    "cursorSync": "Off",
+    "editable": true,
+    "elements": {
+      "panel-1": {
+        "kind": "Panel",
+        "spec": {
+          "id": 1,
+          "title": "Soil Relative Wetness Index",
+          "description": "Experimental relative wetness index, not absolute soil moisture percentage",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "plantcare-influxdb"
+                      },
+                      "spec": {
+                        "query": "\r\nfrom(bucket: \"plantcare\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"plantcare_soil\" and\r\n    r._field == \"relative_wetness_pct\" and\r\n    r.data_source == \"real\"\r\n  )\r\n  |> aggregateWindow(\r\n    every: 1m,\r\n    fn: last,\r\n    createEmpty: false\r\n  )\r\n  |> yield(name: \"Soil Wetness\")\r\n"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "13.2.2",
+            "spec": {
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "lastNotNull",
+                    "min",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "enableFacetedFilter": false,
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "single",
+                  "sort": "none"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "displayName": "Soil Wetness Index",
+                  "unit": "percent",
+                  "decimals": 1,
+                  "min": 0,
+                  "max": 100,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "#ef4444"
+                      },
+                      {
+                        "value": 17,
+                        "color": "#f59e0b"
+                      },
+                      {
+                        "value": 20,
+                        "color": "#14b8a6"
+                      },
+                      {
+                        "value": 70,
+                        "color": "#38bdf8"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds",
+                    "seriesBy": "last"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "Relative wetness (%)",
+                    "axisPlacement": "left",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.6,
+                    "drawStyle": "line",
+                    "fillOpacity": 10,
+                    "gradientMode": "scheme",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": 180000,
+                    "lineInterpolation": "linear",
+                    "lineStyle": {
+                      "fill": "solid"
+                    },
+                    "lineWidth": 2,
+                    "pointSize": 3,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "auto",
+                    "showValues": false,
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-10": {
+        "kind": "Panel",
+        "spec": {
+          "id": 10,
+          "title": "Soil Condition",
+          "description": "",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "plantcare-influxdb"
+                      },
+                      "spec": {
+                        "query": "\r\nfrom(bucket: \"plantcare\")\r\n  |> range(start: -3m)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"plantcare_soil\" and\r\n    r._field == \"relative_wetness_pct\" and\r\n    r.data_source == \"real\" and\r\n    r.device_id == \"esp32_01\"\r\n  )\r\n  |> group(columns: [])\r\n  |> last()\r\n  |> map(fn: (r) => ({\r\n    _time: r._time,\r\n    _field: \"soil_condition\",\r\n    _value:\r\n      if r._value < 17.0 then 0.0\r\n      else if r._value < 20.0 then 1.0\r\n      else if r._value < 70.0 then 2.0\r\n      else 3.0\r\n  }))\r\n  |> yield(name: \"soil_condition\")\r\n"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "13.2.2",
+            "spec": {
+              "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "value",
+                "wideLayout": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Observed Dry",
+                          "color": "red",
+                          "index": 0
+                        },
+                        "1": {
+                          "text": "Low Wetness",
+                          "color": "orange",
+                          "index": 1
+                        },
+                        "2": {
+                          "text": "Observed Moderate",
+                          "color": "green",
+                          "index": 2
+                        },
+                        "3": {
+                          "text": "High Wetness Reading",
+                          "color": "blue",
+                          "index": 3
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "green"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "noValue": "No recent data"
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-2": {
+        "kind": "Panel",
+        "spec": {
+          "id": 2,
+          "title": "AMG8833 Thermal Temperature",
+          "description": "",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "plantcare-influxdb"
+                      },
+                      "spec": {
+                        "query": "\r\nfrom(bucket: \"plantcare\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"plantcare_thermal\" and\r\n    (r._field == \"t_min_c\" or\r\n     r._field == \"t_max_c\") and\r\n    r.data_source == \"real\"\r\n  )\r\n  |> aggregateWindow(\r\n    every: 1m,\r\n    fn: last,\r\n    createEmpty: false\r\n  )\r\n"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "13.2.2",
+            "spec": {
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "lastNotNull",
+                    "min",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "multi",
+                  "sort": "none"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "celsius",
+                  "decimals": 2,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "#38bdf8"
+                      },
+                      {
+                        "value": 80,
+                        "color": "#fb923c"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "palette-classic",
+                    "seriesBy": "max"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "Temperature (°C)",
+                    "axisPlacement": "left",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.9,
+                    "drawStyle": "line",
+                    "fillOpacity": 0,
+                    "gradientMode": "none",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": 180000,
+                    "lineInterpolation": "linear",
+                    "lineStyle": {
+                      "fill": "solid"
+                    },
+                    "lineWidth": 2,
+                    "pointSize": 1,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "auto",
+                    "showValues": false,
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byRegexp",
+                      "scope": "series",
+                      "options": ".*t_max_c.*"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Thermal Max"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#fb923c",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byRegexp",
+                      "scope": "series",
+                      "options": ".*t_min_c.*"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Thermal Min"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#38bdf8",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-3": {
+        "kind": "Panel",
+        "spec": {
+          "id": 3,
+          "title": "Soil Sensor - Raw vs Filtered ADC",
+          "description": "Comparison of raw ADC readings and EMA-filtered values",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "plantcare-influxdb"
+                      },
+                      "spec": {
+                        "query": "\r\nfrom(bucket: \"plantcare\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"plantcare_soil\" and\r\n    r.data_source == \"real\" and\r\n    (\r\n      r._field == \"soil_adc_raw\" or\r\n      r._field == \"soil_adc_filtered\"\r\n    )\r\n  )\r\n  |> aggregateWindow(\r\n    every: 1m,\r\n    fn: last,\r\n    createEmpty: false\r\n  )\r\n"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "13.2.2",
+            "spec": {
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "last",
+                    "min",
+                    "max"
+                  ],
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "multi",
+                  "sort": "none"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "decimals": 1,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "green"
+                      },
+                      {
+                        "value": 80,
+                        "color": "red"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.6,
+                    "drawStyle": "line",
+                    "fillOpacity": 5,
+                    "gradientMode": "none",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": 180000,
+                    "lineInterpolation": "linear",
+                    "lineWidth": 2,
+                    "pointSize": 5,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "auto",
+                    "showValues": false,
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byRegexp",
+                      "scope": "series",
+                      "options": ".*soil_adc_raw.*"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Raw ADC"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#a78bfa",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byRegexp",
+                      "scope": "series",
+                      "options": ".*soil_adc_filtered.*"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Filtered ADC"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#fbbf24",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-4": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4,
+          "title": "Current Soil Wetness",
+          "description": "",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "plantcare-influxdb"
+                      },
+                      "spec": {
+                        "query": "\r\nfrom(bucket: \"plantcare\")\r\n  |> range(start: -15m)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"plantcare_soil\" and\r\n    r._field == \"relative_wetness_pct\" and\r\n    r.data_source == \"real\" and\r\n    r.device_id == \"esp32_01\"\r\n  )\r\n  |> last()\r\n"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "13.2.2",
+            "spec": {
+              "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "auto",
+                "wideLayout": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percent",
+                  "decimals": 1,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "red"
+                      },
+                      {
+                        "value": 17,
+                        "color": "#f59e0b"
+                      },
+                      {
+                        "value": 20,
+                        "color": "#14b8a6"
+                      },
+                      {
+                        "value": 70,
+                        "color": "#38bdf8"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "noValue": "No recent data"
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-5": {
+        "kind": "Panel",
+        "spec": {
+          "id": 5,
+          "title": "Current Thermal Maximum",
+          "description": "",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "plantcare-influxdb"
+                      },
+                      "spec": {
+                        "query": "\r\nfrom(bucket: \"plantcare\")\r\n  |> range(start: -15m)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"plantcare_thermal\" and\r\n    r._field == \"t_max_c\" and\r\n    r.data_source == \"real\" and\r\n    r.device_id == \"esp32_01\"\r\n  )\r\n  |> last()\r\n"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "13.2.2",
+            "spec": {
+              "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "auto",
+                "wideLayout": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "celsius",
+                  "decimals": 2,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "#fb923c"
+                      },
+                      {
+                        "value": 35,
+                        "color": "red"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "noValue": "No recent data"
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-6": {
+        "kind": "Panel",
+        "spec": {
+          "id": 6,
+          "title": "Last Data Received",
+          "description": "Minutes since the latest Soil measurement was stored in InfluxDB",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "plantcare-influxdb"
+                      },
+                      "spec": {
+                        "query": "\r\nfrom(bucket: \"plantcare\")\r\n  |> range(start: -7d)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"plantcare_soil\" and\r\n    r._field == \"relative_wetness_pct\" and\r\n    r.data_source == \"real\" and\r\n    r.device_id == \"esp32_01\"\r\n  )\r\n  |> last()\r\n  |> map(fn: (r) => ({\r\n    r with\r\n    _value: float(\r\n      v: uint(v: now()) - uint(v: r._time)\r\n    ) / 60000000000.0,\r\n    _time: now(),\r\n    _field: \"minutes_since_last\"\r\n  }))\r\n"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "13.2.2",
+            "spec": {
+              "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "auto",
+                "wideLayout": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "suffix: min",
+                  "decimals": 1,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "green"
+                      },
+                      {
+                        "value": 3,
+                        "color": "#EAB839"
+                      },
+                      {
+                        "value": 10,
+                        "color": "red"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "noValue": "No data in 7 days"
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-7": {
+        "kind": "Panel",
+        "spec": {
+          "id": 7,
+          "title": "PlantCare Historical Sensor Data",
+          "description": "Historical one-minute Soil and AMG8833 measurements",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "plantcare-influxdb"
+                      },
+                      "spec": {
+                        "query": "\r\nfrom(bucket: \"plantcare\")\r\n  |> range(\r\n    start: v.timeRangeStart,\r\n    stop: v.timeRangeStop\r\n  )\r\n  |> filter(fn: (r) =>\r\n    r.data_source == \"real\" and\r\n    (\r\n      r._measurement == \"plantcare_soil\" or\r\n      r._measurement == \"plantcare_thermal\"\r\n    )\r\n  )\r\n  |> aggregateWindow(\r\n    every: 1m,\r\n    fn: last,\r\n    createEmpty: false\r\n  )\r\n  |> group(columns: [])\r\n  |> pivot(\r\n    rowKey: [\"_time\", \"plant_id\", \"device_id\"],\r\n    columnKey: [\"_measurement\", \"_field\"],\r\n    valueColumn: \"_value\"\r\n  )\r\n  |> keep(columns: [\r\n    \"_time\",\r\n    \"plant_id\",\r\n    \"device_id\",\r\n    \"plantcare_soil_soil_adc_raw\",\r\n    \"plantcare_soil_soil_adc_filtered\",\r\n    \"plantcare_soil_relative_wetness_pct\",\r\n    \"plantcare_thermal_t_min_c\",\r\n    \"plantcare_thermal_t_max_c\",\r\n    \"plantcare_thermal_t_left_c\",\r\n    \"plantcare_thermal_t_right_c\",\r\n    \"plantcare_thermal_delta_t_c\"\r\n  ])\r\n  |> sort(columns: [\"_time\"], desc: true)\r\n"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {},
+                      "includeByName": {},
+                      "indexByName": {},
+                      "renameByName": {
+                        "_time": "Time",
+                        "device_id": "Device",
+                        "plant_id": "Plant",
+                        "plantcare_soil_relative_wetness_pct": "Wetness (%)",
+                        "plantcare_soil_soil_adc_filtered": "ADC Filtered",
+                        "plantcare_soil_soil_adc_raw": "ADC Raw",
+                        "plantcare_thermal_delta_t_c": "Delta T",
+                        "plantcare_thermal_t_left_c": "Thermal Left",
+                        "plantcare_thermal_t_max_c": "Thermal Max",
+                        "plantcare_thermal_t_min_c": "Thermal Min",
+                        "plantcare_thermal_t_right_c": "Thermal Right"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "13.2.2",
+            "spec": {
+              "options": {
+                "cellHeight": "md",
+                "enablePagination": true,
+                "showHeader": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "green"
+                      },
+                      {
+                        "value": 80,
+                        "color": "red"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "footer": {
+                      "reducers": []
+                    },
+                    "inspect": false
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-8": {
+        "kind": "Panel",
+        "spec": {
+          "id": 8,
+          "title": "Sensor Data Connectivity",
+          "description": "",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "plantcare-influxdb"
+                      },
+                      "spec": {
+                        "query": "\r\nsamples =\r\n  from(bucket: \"plantcare\")\r\n    |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n    |> filter(fn: (r) =>\r\n      r.data_source == \"real\" and\r\n      r.device_id == \"esp32_01\" and\r\n      (\r\n        (r._measurement == \"plantcare_soil\" and\r\n         r._field == \"relative_wetness_pct\") or\r\n        (r._measurement == \"plantcare_thermal\" and\r\n         r._field == \"t_max_c\")\r\n      )\r\n    )\r\n    |> keep(columns: [\"_time\", \"_measurement\"])\r\n    |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      _field: if r._measurement == \"plantcare_soil\"\r\n        then \"Soil\"\r\n        else \"Thermal\",\r\n      _value: 1.0\r\n    }))\r\n    |> group(columns: [\"_field\"])\r\n    |> sort(columns: [\"_time\"])\r\n\r\n// เมื่อจุดข้อมูลห่างกันเกิน 180 วินาที\r\n// ให้เริ่มสถานะ Disconnected หลังจุดก่อนหน้า 3 นาที\r\ndisconnections =\r\n  samples\r\n    |> elapsed(unit: 1s, columnName: \"gap_s\")\r\n    |> filter(fn: (r) => r.gap_s > 180)\r\n    |> map(fn: (r) => ({\r\n      _time: time(v:\r\n        uint(v: r._time) -\r\n        uint(v: r.gap_s - 180) * uint(v: 1000000000)\r\n      ),\r\n      _field: r._field,\r\n      _value: 0.0\r\n    }))\r\n\r\n// ตรวจกรณีข้อมูลล่าสุดหยุดเข้าและยังไม่กลับมา\r\ncurrent_disconnections =\r\n  samples\r\n    |> last()\r\n    |> filter(fn: (r) =>\r\n      uint(v: now()) >\r\n      uint(v: r._time) + uint(v: 180000000000)\r\n    )\r\n    |> map(fn: (r) => ({\r\n      _time: time(v:\r\n        uint(v: r._time) + uint(v: 180000000000)\r\n      ),\r\n      _field: r._field,\r\n      _value: 0.0\r\n    }))\r\n\r\nunion(tables: [\r\n  samples,\r\n  disconnections,\r\n  current_disconnections\r\n])\r\n  |> group(columns: [\"_field\"])\r\n  |> sort(columns: [\"_time\"])\r\n  |> yield(name: \"sensor_connectivity\")\r\n"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "state-timeline",
+            "version": "13.2.2",
+            "spec": {
+              "options": {
+                "alignValue": "left",
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "mergeValues": true,
+                "rowHeight": 0.7,
+                "showValue": "always",
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "single",
+                  "sort": "none"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "decimals": 1,
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Disconnected",
+                          "color": "red",
+                          "index": 1
+                        },
+                        "1": {
+                          "text": "Connected",
+                          "color": "green",
+                          "index": 0
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "green"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisPlacement": "auto",
+                    "fillOpacity": 85,
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineWidth": 0,
+                    "spanNulls": false
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-9": {
+        "kind": "Panel",
+        "spec": {
+          "id": 9,
+          "title": "Thermal Exposure Status",
+          "description": "",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "plantcare-influxdb"
+                      },
+                      "spec": {
+                        "query": "\r\nfrom(bucket: \"plantcare\")\r\n  |> range(start: -3m)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"plantcare_thermal\" and\r\n    r.data_source == \"real\" and\r\n    r.device_id == \"esp32_01\" and\r\n    (\r\n      r._field == \"t_max_c\" or\r\n      r._field == \"delta_t_c\"\r\n    )\r\n  )\r\n  |> group(columns: [])\r\n  |> pivot(\r\n    rowKey: [\"_time\"],\r\n    columnKey: [\"_field\"],\r\n    valueColumn: \"_value\"\r\n  )\r\n  |> filter(fn: (r) =>\r\n    exists r.t_max_c and\r\n    exists r.delta_t_c\r\n  )\r\n  |> sort(columns: [\"_time\"], desc: true)\r\n  |> limit(n: 1)\r\n  |> map(fn: (r) => ({\r\n    _time: r._time,\r\n    _field: \"thermal_exposure\",\r\n    _value:\r\n      if r.t_max_c >= 35.0 then 2.0\r\n      else if r.delta_t_c >= 2.0 then 1.0\r\n      else 0.0\r\n  }))\r\n  |> yield(name: \"thermal_exposure\")\r\n"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "13.2.2",
+            "spec": {
+              "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "auto",
+                "wideLayout": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Within Trial Thresholds",
+                          "color": "green",
+                          "index": 0
+                        },
+                        "1": {
+                          "text": "Uneven Thermal Exposure",
+                          "color": "orange",
+                          "index": 1
+                        },
+                        "2": {
+                          "text": "Elevated Temperature",
+                          "color": "red",
+                          "index": 2
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "green"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "noValue": "No recent data"
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      }
+    },
+    "layout": {
+      "kind": "GridLayout",
+      "spec": {
+        "items": [
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 0,
+              "y": 0,
+              "width": 5,
+              "height": 3,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-4"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 5,
+              "y": 0,
+              "width": 5,
+              "height": 3,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-5"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 10,
+              "y": 0,
+              "width": 4,
+              "height": 3,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-6"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 14,
+              "y": 0,
+              "width": 5,
+              "height": 3,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-10"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 19,
+              "y": 0,
+              "width": 5,
+              "height": 3,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-9"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 0,
+              "y": 3,
+              "width": 12,
+              "height": 7,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-1"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 12,
+              "y": 3,
+              "width": 12,
+              "height": 7,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-2"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 0,
+              "y": 10,
+              "width": 12,
+              "height": 7,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-3"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 12,
+              "y": 10,
+              "width": 12,
+              "height": 7,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-8"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 0,
+              "y": 17,
+              "width": 24,
+              "height": 7,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-7"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "links": [],
+    "liveNow": false,
+    "preload": false,
+    "tags": [],
+    "timeSettings": {
+      "timezone": "browser",
+      "from": "now-6h",
+      "to": "now",
+      "autoRefresh": "",
+      "autoRefreshIntervals": [
+        "5s",
+        "10s",
+        "30s",
+        "1m",
+        "5m",
+        "15m",
+        "30m",
+        "1h",
+        "2h",
+        "1d"
+      ],
+      "hideTimepicker": false,
+      "fiscalYearStartMonth": 0
+    },
+    "title": "PlantcareIOT",
+    "variables": [
+      {
+        "kind": "DatasourceVariable",
+        "spec": {
+          "name": "datasource0",
+          "pluginId": "",
+          "refresh": "onDashboardLoad",
+          "regex": "",
+          "current": {
+            "text": "PlantCare InfluxDB",
+            "value": "plantcare-influxdb"
+          },
+          "options": [],
+          "multi": false,
+          "includeAll": false,
+          "hide": "dontHide",
+          "skipUrlSync": false,
+          "allowCustomValue": true
+        }
+      }
+    ],
+    "preferences": {
+      "layout": {
+        "kind": "GridLayout",
+        "spec": {
+          "items": []
+        }
+      }
+    }
+  }
+}

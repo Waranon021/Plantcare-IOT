@@ -1,0 +1,229 @@
+\documentclass{ieeeaccess}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{cite}
+\usepackage{url}
+\usepackage{array}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\setlength{\tabcolsep}{4pt}
+\graphicspath{{figures/}}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\degc}{\,^{\circ}\mathrm{C}}
+\setlength{\emergencystretch}{1em}
+
+\begin{document}
+\history{AST01.41 Capstone Project Final Manuscript}
+\title{PlantCare IoT for Soil Wetness and Thermal Exposure Monitoring in Potted Plants}
+\author{\uppercase{Jirapat Datephanyawat and Waranon Neamtuptim}}
+\address{ICT Department, School of Engineering and Technology, Asian Institute of Technology, Pathum Thani, Thailand}
+\tfootnote{This work was carried out for AST01.41 Fundamentals of Internet of Things and Cloud Computing at the Asian Institute of Technology.}
+\markboth{Datephanyawat and Neamtuptim: PlantCare IoT}{Datephanyawat and Neamtuptim: PlantCare IoT}
+
+\begin{abstract}
+Watering a potted plant on a fixed schedule can waste water or leave the root zone dry because the soil surface gives limited information about conditions below it. Uneven radiant heating adds a second condition that visual inspection can miss. A cloud-only monitor makes every reading depend on the uplink and has little reason to transmit every thermal frame at the local sampling rate. PlantCare IoT combines a capacitive probe and an eight-by-eight infrared array with an ESP32 that smooths soil readings, calculates a relative wetness index, and presents local readings. The firmware sends periodic HTTPS snapshots to Node-RED. InfluxDB and Grafana on the lab platform support time-series storage, historical review, and experimental status indicators. A saved Grafana Explore CSV contained 5,860 unique minute rows, of which 5,844 contained both soil and thermal fields. The export contained long gaps, including a 967-minute interval between consecutive rows. Four watering observations showed a consistent decrease in the raw soil reading immediately after watering. The prototype demonstrates a monitoring workflow with manual plant care. Its thresholds are specific to the trial, and controlled measurements of water savings, latency, link overhead, and energy efficiency remain outstanding.
+\end{abstract}
+
+\begin{keywords}
+Edge computing, Internet of Things, soil wetness, thermal monitoring, time-series databases
+\end{keywords}
+\titlepgskip=-21pt
+\maketitle
+
+\section{Introduction, Problem Statement and Objectives}
+\PARstart{W}{atering} a container plant requires judging the condition at the probe depth and interpreting how it changes after watering. A pot may look dry at the surface while deeper soil still holds water. Conversely, a fixed schedule may miss rapid drying near a sunlit opening. FAO AQUASTAT attributes about 69\% of global freshwater withdrawals to agriculture \cite{fao}. That context motivates measurement-informed water use, although the trial concerns a single pot and measures neither total irrigation volume nor water savings. Prior experiments with low-cost capacitive probes show the importance of soil-specific calibration \cite{calibration}. PlantCare therefore reports a relative index referenced to observations from its own pot.
+
+The monitored plant was identified as \textit{Portulaca} in the firmware and local dashboard. The prototype follows changes in soil readings and uses a low-resolution infrared array to observe spatial temperature variation in the sensor's field of view. The plant owner can consult those signals before checking the soil, moving the pot, or changing its shade. All care decisions and actions remain manual.
+
+\subsection{Limitations of Cloud-Only Architectures}
+The local display targets a two-second update interval. Forwarding a complete thermal frame on every such cycle would produce about 30 requests per minute at the nominal rate. The implemented firmware attempts one upload per minute and still sends the full 64-value frame when available. The 30-to-1 ratio describes nominal frame opportunities, while measured bytes depend on payload size, connection setup, retransmission, and data loss. Processing soil readings locally lets the LCD continue to show available readings during an uplink interruption. The ESP32 web page additionally requires a reachable local network. History at the server still depends on successful delivery.
+
+\subsection{Objectives and Contributions}
+\begin{enumerate}
+\item Acquire soil ADC readings and thermal frames on one ESP32, preserve raw and processed soil values, and check the direction of the response around manual watering.
+\item Separate local display cadence from remote upload cadence and document the implemented JSON contract and its acceptance semantics.
+\item Trace HTTPS telemetry into time-series storage, Grafana plots, and CSV, and quantify coverage and missing fields in a saved export.
+\item Present readable trial status and freshness information, with a documented boundary between observation, rule output, and plant-care advice.
+\end{enumerate}
+The four objectives are evaluated by the paired observations in Table~\ref{tab:watering}, the firmware cadence and ingest contract in Sections III and IV, the CSV audit in Table~\ref{tab:daily}, and the saved dashboard rules in Table~\ref{tab:thresholds}.
+
+\section{Literature Review and Related Work}
+\subsection{Reference Architecture Standard}
+The Industrial Internet Reference Architecture (IIRA) separates business, usage, functional, and implementation concerns \cite{iira}. The \emph{business viewpoint} connects the plant owner's water-use goal to decisions informed by soil and thermal readings. The \emph{usage viewpoint} describes the sequence of inspecting Grafana, checking the pot, and acting manually. The \emph{functional viewpoint} maps sensing to the ESP32, information handling to Node-RED and InfluxDB, and presentation to the local display and Grafana. The \emph{implementation viewpoint} records the placement of these functions on the embedded board and lab infrastructure, with a TLS boundary on the uplink. The mapping uses IIRA as a design reference for a small prototype.
+
+\subsection{Protocol Trade-offs}
+MQTT supports asynchronous publish--subscribe and can amortize connection setup over many messages. QoS 0 has no publish acknowledgement. QoS 1 acknowledges delivery to the MQTT receiver and permits duplicate delivery \cite{mqtt}. A broker acknowledgement alone cannot establish persistence in a downstream database. A lossy link can interrupt an MQTT session, so recovery depends on session settings and client-side buffering. HTTP provides an explicit response for each POST, with request headers and, in this firmware, a new connection for each attempt. HTTP \code{202} reports acceptance for processing \cite{http}. Repeated POSTs after ambiguous failures need an application-level deduplication strategy. The prototype uses HTTPS because one device sends a combined snapshot at low frequency and Node-RED can handle the request directly. This simplifies testing and removes the operational dependency on a broker from the telemetry path. The reviewed firmware has no offline replay queue.
+
+\subsection{Comparative Synthesis of Prior Work}
+Kim \emph{et al.} used in-field sensing stations and a base computer for variable-rate irrigation \cite{kim}. Abdelmoneim \emph{et al.} used a Wi-Fi ESP32 to log tensiometer readings locally and upload to ThingSpeak, with deep sleep between measurement cycles \cite{tensiometer}. Table~\ref{tab:related} places PlantCare alongside both. PlantCare uses local normalization and live visual feedback on a faster schedule, and its user interprets measurements before any intervention. The tensiometer study measures water potential, while PlantCare's capacitive probe is referenced to observed ADC values. These measurements answer different questions about the soil.
+
+\begin{table*}[!t]
+\caption{Comparison of representative soil and irrigation monitoring systems.}
+\label{tab:related}
+\centering\small
+\begin{tabular}{@{}L{.13\textwidth}L{.17\textwidth}L{.14\textwidth}L{.18\textwidth}L{.15\textwidth}L{.14\textwidth}@{}}
+\hline
+System & Architecture & Protocol or link & Local processing & Security evidence & Domain\\ \hline
+Kim \emph{et al.} \cite{kim} & Distributed field stations and base computer & Bluetooth telemetry & Stations sample locally. Base computer controls sprinklers. & Mechanism unspecified in accessible study summary & Field irrigation control\\
+Abdelmoneim \emph{et al.} \cite{tensiometer} & ESP32, SD storage, ThingSpeak & Wi-Fi uplink to ThingSpeak & Local logging and deep-sleep scheduling & Mechanism unspecified in reviewed description & Soil water potential\\
+PlantCare IoT & ESP32 and lab-hosted time-series services & Wi-Fi and HTTPS POST & ADC averaging and smoothing, relative wetness, local thermal display & Server CA validation and static ingest key & Single potted plant\\
+\hline
+\end{tabular}
+\end{table*}
+
+\section{Proposed System Design and Interoperability}
+Figure~\ref{fig:architecture} and Table~\ref{tab:layers} describe the implemented path. Table~\ref{tab:changes} compares it with the earlier PlantCare proposal \cite{proposal}.
+
+\subsection{Four-Layer System Architecture}
+\begin{figure}[!t]
+\centering
+\includegraphics[width=.96\columnwidth]{architecture.pdf}
+\caption{PlantCare telemetry flows from the sensing device through HTTPS to the lab platform and its user-facing outputs. The ESP32 also provides a direct LCD and local HTTP view.}
+\label{fig:architecture}
+\end{figure}
+
+\begin{table}[!t]
+\caption{Technology mapping for the implemented architecture.}
+\label{tab:layers}
+\centering\footnotesize
+\begin{tabular}{@{}L{.18\columnwidth}L{.29\columnwidth}L{.45\columnwidth}@{}}
+\hline
+Layer & Technology & Function\\ \hline
+Sensing & ESP32, probe, AMG8833, LCD1602 & Local two-second sensing, ADC smoothing, thermal view and device display.\\
+Network & Wi-Fi, HTTPS, JSON & Sends the latest valid sections about once per minute.\\
+Platform & Lab Proxmox LXC, Node-RED, InfluxDB 2 & Ingest, field shaping and time-series persistence.\\
+Application & Grafana and CSV workflow & Current readings, status, trends, and offline review of exported records.\\ \hline
+\end{tabular}
+\end{table}
+
+\emph{Sensing.} The capacitive probe supplies an analog value from one position in the pot. The AMG8833 reads 64 infrared pixel temperatures over I$^2$C. The ESP32 maintains a recent snapshot for all its outputs, so serving a local request does not trigger a second measurement.
+
+\emph{Network.} The ESP32 sends JSON via Wi-Fi over a TLS connection with server certificate validation. The JSON carries identifiers and optional sensor objects so the server can associate readings even when only one sensor is available.
+
+\emph{Platform.} Node-RED is the ingestion and shaping service. InfluxDB stores the resulting timestamped fields. The project identifies the deployment as lab-hosted Proxmox LXC. The reviewed flow targets InfluxDB 2 using the Node-RED InfluxDB integration. The deployment inventory was unavailable, so the report describes the service boundaries without assigning individual services to specific containers.
+
+\emph{Application.} Grafana reads InfluxDB through the PlantcareIOT data source. Current readings, freshness, trends, and historical rows serve different purposes. An export allows review outside Grafana and can preserve selected history beyond the database retention period if archived independently. The application leaves the plant owner in control.
+
+\begin{table}[!t]
+\caption{Changes from the original proposal and their consequences.}
+\label{tab:changes}
+\centering\footnotesize
+\begin{tabular}{@{}L{.27\columnwidth}L{.31\columnwidth}L{.34\columnwidth}@{}}
+\hline
+Proposal & Implemented or reported & Rationale and trade-off\\ \hline
+AWS EC2 services, S3 archive & Lab Proxmox LXC, InfluxDB, Grafana, reported daily CSV export & Reuses the lab stack and makes data review straightforward. Archive durability depends on where files are stored.\\
+Mosquitto with MQTT/TLS QoS 1 & Direct HTTPS POST to Node-RED & One request contract for a periodic snapshot. New TLS connections add overhead.\\
+JWT registration and assigned topic prefix & Configured endpoint and static header key & Simpler provisioning for one device, with less granular credential management.\\
+Thermal summary at the ESP32 and a replay buffer & Full valid frame on upload, local min/max and local heatmap & Retains spatial detail for server processing. Missed periods can leave permanent history gaps.\\
+Approximate soil moisture classes and recommendations & Relative index, current values and trial status in Grafana & Makes thresholds traceable to one trial and keeps care decisions manual.\\ \hline
+\end{tabular}
+\end{table}
+
+The MQTT test flow documents the earlier broker experiment. The rationale in Table~\ref{tab:changes} describes engineering fit inferred from the artifacts.
+
+\subsection{MQTT Topic Hierarchy}
+The proposal organized MQTT routing as \path{plantcare/site/plant/device/type}. Its worked example was \path{plantcare/ait/plant01/esp32_01/soil}, with a project namespace, site, plant, device, and stream. The production-style HTTPS client uses one route and carries the plant and device identifiers in the request body, with soil and thermal sections selecting the stream. The bucket separates those streams by measurement, while tags enable filtering by identity and data source. The proposed site level has no corresponding field in the observed firmware payload. The exported Node-RED flow subscribes to \path{plantcare/ait/plant01/esp32_01/+} and routes messages to a debug node. The \code{soil}, \code{thermal}, and \code{status} topics exercise a separate validation path. The live sensor write path shown in Fig.~\ref{fig:nodered} uses HTTPS.
+
+\subsection{REST API Contract}
+The firmware calls \code{POST /plantcare/ingest} over HTTPS. The host and key are omitted. The required content type is \code{application/json}. The caller sends the shared key in \code{x-plantcare-key}. An illustrative soil-only body using the verified field names is:
+
+{\footnotesize
+\begin{verbatim}
+{
+  "plant_id": "plant01",
+  "device_id": "esp32_01",
+  "data_source": "real",
+  "soil": {
+    "sensor_ok": true, "raw": 2468,
+    "filtered_raw": 2466,
+    "relative_wetness_pct": 43.53
+  }
+}
+\end{verbatim}
+}
+The thermal object, when present, contains \code{pixels}, an ordered array of 64 temperatures in degrees Celsius. The firmware skips a request if neither sensor is ready. It treats \code{202 Accepted} as successful ingestion for downstream processing. The exported handler returns the following JSON on acceptance (soil-only example).
+{\footnotesize
+\begin{verbatim}
+{"ok":true,"accepted":true,
+ "soil":true,"thermal":false}
+\end{verbatim}
+}
+A missing or invalid key returns \code{401} with \code{invalid\_api\_key}. Malformed or invalid telemetry returns \code{400} and an error code, such as \code{invalid\_json} or \code{invalid\_thermal}. A request with neither sensor returns \code{no\_sensor\_data}. On rejection the handler emits no database messages.
+
+\section{Research Methodology and Implementation}
+\subsection{Device-Level Stack}
+Figure~\ref{fig:hardware} shows the ESP32 development kit, LCD, cabling, and hanging pot. The firmware uses Arduino C/C++, the ESP32 Wi-Fi and web-server libraries, and the Adafruit AMG88xx library. The probe is read on GPIO34 (ADC1), with a 12-bit ADC configuration. The I$^2$C bus uses GPIO21 and GPIO22. The board is shown cabled during operation. Supply voltage at the probe, operating current, and power were not measured in the retained evidence.
+
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=.67\textwidth]{hardware.jpg}
+\caption{PlantCare field setup. (A) ESP32 development kit and illuminated LCD. (B) Hanging pot and cable routing near the balcony opening. (C) Close view of the monitored plant. Source: local project photographs.}
+\label{fig:hardware}
+\end{figure*}
+
+The sketch averages 20 ADC reads, spaced by approximately 3 ms in the loop. It excludes means at or below 10 or at or above 4085 as a basic plausibility check. The exponential moving average (EMA) uses weight 0.25 for the latest valid mean and 0.75 for the previous estimate. On initialization or after an invalid sample, the next valid sample seeds the filter. The calculation clips the relative wetness index to the observed scale:
+\begin{equation}
+W=\operatorname{clip}_{[0,100]}\!
+   \left(100\,\frac{2614-A_{\rm EMA}}{2614-2274}\right).
+\label{eq:wetness}
+\end{equation}
+Here $A_{\rm EMA}$ is in ADC counts. The archived sketch implements the mapping below, excerpted with comments omitted. The recorded raw field is the 20-read mean.
+{\footnotesize
+\begin{verbatim}
+float index =
+  (SOIL_BEFORE_WATER_REF - currentADC) /
+  referenceRange * 100.0f;
+return constrain(index, 0.0f, 100.0f);
+\end{verbatim}
+}
+The endpoints refer to the average before watering and immediately after watering. They do not establish physically dry or saturated soil. Clipping hides variation beyond the endpoints in $W$, so retaining raw and filtered ADC values matters. The EMA also delays the index response to sudden changes. Invalid soil is represented as unavailable in the local JSON and omitted in the HTTPS body.
+
+For thermal data, the sketch checks I$^2$C connectivity and finite pixel values, calculates the frame minimum and maximum, and updates the cached frame. The local browser interpolates the image for display from 64 measured cells. Interpolation adds no new spatial information. A pixel can include foliage, pot, wall, or background. Sensor orientation, distance, and surface emissivity therefore limit interpretation. Node-RED splits each row into columns 0--3 and 4--7 using the pixel index modulo eight. It averages the 32 values in each half and writes the absolute difference $\Delta T=|T_{\rm left}-T_{\rm right}|$ alongside the frame minimum and maximum. The left and right labels describe array coordinates. Their physical orientation depends on how the sensor was mounted.
+
+\subsection{Platform Containerization}
+The lab platform runs the server-side services on Proxmox LXC. Node-RED accepts telemetry and emits separate InfluxDB messages for valid soil and thermal sections. The flow uses \code{node-red-contrib-influxdb} version 0.7.0 and targets an InfluxDB 2 bucket named \code{plantcare}. Grafana reads it over a Flux data source. The InfluxDB integration uses millisecond write precision in the exported configuration. Figure~\ref{fig:nodered} shows the three outputs of the ingest function \cite{projectevidence}. The adjacent MQTT debug, simulated validation, and manual write tests have distinct purposes. Grafana filters for \code{data\_source=real} to exclude simulated writes.
+
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=.84\textwidth]{node-red-ingest.png}
+\caption{HTTPS ingest branch of the Node-RED editor. The validator sends a response on its first output and routes accepted soil and thermal records to separate InfluxDB nodes. The crop excludes the connection settings sidebar.}
+\label{fig:nodered}
+\end{figure*}
+
+The recorded schema pairs \code{plantcare\_soil} with \code{soil\_adc\_raw}, \code{soil\_adc\_filtered}, and \code{relative\_wetness\_pct}. The thermal measurement \code{plantcare\_thermal} has \code{t\_min\_c}, \code{t\_max\_c}, \code{t\_left\_c}, \code{t\_right\_c}, and \code{delta\_t\_c}. Historical query context identifies tags \code{plant\_id}, \code{device\_id}, and \code{data\_source}. The submitted JSON body lacks an explicit acquisition timestamp. A stored time or a Grafana minute label consequently cannot be used as a device-to-dashboard latency measurement.
+
+\emph{Retention and scheduled export.} The reported configuration for \code{plantcare} is 180 days (4,320 hours). InfluxDB's retention service removes eligible shard groups after their time range ages out \cite{retention}. The project reports a daily Cron job that exports historical data to CSV. The schedule time, timezone, script, output location, raw execution log, and counts from the scheduled files remain unverified. CSV retention is a separate operational policy. Local CSV copies support analysis, while a recoverable backup requires a separately retained and tested copy. The following read-only checks are for the authorized lab operator using the active Influx CLI configuration and the job owner's account. Their outputs are pending.
+{\footnotesize
+\begin{verbatim}
+influx bucket list --name plantcare
+crontab -l
+\end{verbatim}
+}
+
+\subsection{Identity and Access Management}
+The ESP32 waits for plausible wall-clock time before attempting TLS and configures a CA root with \code{setCACert}. The request carries a shared key. The Node-RED function reads its expected value from \code{PLANTCARE\_INGEST\_KEY} and rejects requests when the key is absent, too short, or different from the configured value. The firmware excerpt shows the client side of the exchange.
+\begin{minipage}{\columnwidth}{\footnotesize
+\begin{verbatim}
+client.setCACert(CLOUD_ROOT_CA);
+// ... connection setup ...
+https.addHeader("Content-Type",
+                "application/json");
+https.addHeader("x-plantcare-key",
+                CLOUD_API_KEY);
+const int status = https.POST(payload);
+\end{verbatim}
+}\end{minipage}
+TLS validates the server, while the shared key is the device-side credential. The visible \code{device\_id} is a payload identifier. The inspected sketch uses a static key provisioned with firmware, with no rotation, TTL, or refresh exchange. The ESP32's local HTTP routes are a separate LAN-only access assumption and the code does not enforce route-level authentication. The exported flow configures an internal HTTP hop to InfluxDB. Restrict that hop to the lab network or use TLS across an untrusted network. The artifacts establish the ESP32 HTTPS boundary and the ingest check. They do not establish token scopes, Grafana roles, or network exposure. For a larger deployment, per-device provisioning, scoped service tokens, and secret-free source distribution would make credential compromise easier to contain.
+
+\subsection{End-to-End Data Flow}
+\begin{enumerate}
+\item The ESP32 reads the probe and the AMG8833 on a nominal two-second schedule. It averages and filters soil ADC values, normalizes the result, and validates the thermal frame.
+\item The LCD, Serial Monitor, and local web view read the cached snapshot. The browser can fetch \code{/soil} and \code{/thermal}; the latter returns \code{503} when the thermal frame is unavailable.
+\item At the upload interval the ESP32 checks Wi-Fi, clock, key configuration, and sensor readiness. It POSTs the latest valid sections. A missed attempt leaves no replay record in the inspected sketch.
+\item Node-RED accepts the snapshot and shapes the data for InfluxDB. The schema and output fragment show measurement-based storage. Query results provide separate evidence of storage.
+\item Grafana reads the historical series and current values. A separate CSV path supports offline review. The plant owner may then inspect the pot and make a manual intervention.
+\end{enumerate}
+\input{results}
+\input{references}
+\EOD
+\end{document}
+

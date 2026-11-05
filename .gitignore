@@ -1,0 +1,14 @@
+# Local configuration and runtime credentials
+**/credentials.h
+**/secrets.h
+.env
+.env.*
+**/*_cred.json
+**/*.key
+**/*.pfx
+**/*.p12
+node_modules/
+arduino-build/
+*.aux
+*.log
+*.out
