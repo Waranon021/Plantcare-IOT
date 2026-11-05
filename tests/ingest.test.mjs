@@ -15,7 +15,18 @@ assert.deepEqual(only[0].payload,{ok:true,accepted:true,soil:true,thermal:false}
 assert.equal(only[2],null);
 const combined=invoke({...meta,soil,thermal});
 assert.equal(combined[0].statusCode,202);
-assert.deepEqual(combined[2].payload[0],{t_left_c:26,t_right_c:29,t_min_c:26,t_max_c:29,delta_t_c:3});
+const {t_left_c,t_right_c,t_min_c,t_max_c,delta_t_c,...pixelFields}=combined[2].payload[0];
+assert.deepEqual({t_left_c,t_right_c,t_min_c,t_max_c,delta_t_c},
+  {t_left_c:26,t_right_c:29,t_min_c:26,t_max_c:29,delta_t_c:3});
+const orderedPixels=Array.from({length:64},(_,i)=>20+i/10);
+const matrix=invoke({...meta,thermal:{pixels:orderedPixels}});
+assert.equal(matrix[0].statusCode,202);
+assert.equal(matrix[1],null);
+const fields=matrix[2].payload[0];
+assert.equal(Object.keys(fields).filter(k=>/^p[0-7][0-7]$/.test(k)).length,64);
+for(const [index,value] of orderedPixels.entries()){
+  assert.equal(fields["p"+Math.floor(index/8)+index%8],value);
+}
 for(const [input,key,error,status] of [
  [{...meta,soil},"wrong","invalid_api_key",401],
  ["{",testKey,"invalid_json",400],
@@ -30,5 +41,4 @@ for(const [input,key,error,status] of [
  assert.equal(r[1],null);
  assert.equal(r[2],null);
 }
-console.log("8 offline ingest cases passed");
-
+console.log("9 offline ingest cases passed, including all 64 pixel positions");

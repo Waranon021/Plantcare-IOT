@@ -51,7 +51,7 @@
                         "name": "plantcare-influxdb"
                       },
                       "spec": {
-                        "query": "\r\nfrom(bucket: \"plantcare\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"plantcare_soil\" and\r\n    r._field == \"relative_wetness_pct\" and\r\n    r.data_source == \"real\"\r\n  )\r\n  |> aggregateWindow(\r\n    every: 1m,\r\n    fn: last,\r\n    createEmpty: false\r\n  )\r\n  |> yield(name: \"Soil Wetness\")\r\n"
+                        "query": "\nfrom(bucket: \"plantcare\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) =>\n    r._measurement == \"plantcare_soil\" and\n    r._field == \"relative_wetness_pct\" and\n    r.data_source == \"real\"\n  )\n  |> aggregateWindow(\n    every: 1m,\n    fn: last,\n    createEmpty: false\n  )\n  |> yield(name: \"Soil Wetness\")\n"
                       }
                     },
                     "refId": "A",
@@ -184,7 +184,7 @@
                         "name": "plantcare-influxdb"
                       },
                       "spec": {
-                        "query": "\r\nfrom(bucket: \"plantcare\")\r\n  |> range(start: -3m)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"plantcare_soil\" and\r\n    r._field == \"relative_wetness_pct\" and\r\n    r.data_source == \"real\" and\r\n    r.device_id == \"esp32_01\"\r\n  )\r\n  |> group(columns: [])\r\n  |> last()\r\n  |> map(fn: (r) => ({\r\n    _time: r._time,\r\n    _field: \"soil_condition\",\r\n    _value:\r\n      if r._value < 17.0 then 0.0\r\n      else if r._value < 20.0 then 1.0\r\n      else if r._value < 70.0 then 2.0\r\n      else 3.0\r\n  }))\r\n  |> yield(name: \"soil_condition\")\r\n"
+                        "query": "\nfrom(bucket: \"plantcare\")\n  |> range(start: -3m)\n  |> filter(fn: (r) =>\n    r._measurement == \"plantcare_soil\" and\n    r._field == \"relative_wetness_pct\" and\n    r.data_source == \"real\" and\n    r.device_id == \"esp32_01\"\n  )\n  |> group(columns: [])\n  |> last()\n  |> map(fn: (r) => ({\n    _time: r._time,\n    _field: \"soil_condition\",\n    _value:\n      if r._value < 17.0 then 0.0\n      else if r._value < 20.0 then 1.0\n      else if r._value < 70.0 then 2.0\n      else 3.0\n  }))\n  |> yield(name: \"soil_condition\")\n"
                       }
                     },
                     "refId": "A",
@@ -215,7 +215,7 @@
                   "values": false
                 },
                 "showPercentChange": false,
-                "textMode": "value",
+                "textMode": "auto",
                 "wideLayout": true
               },
               "fieldConfig": {
@@ -267,6 +267,113 @@
           }
         }
       },
+      "panel-11": {
+        "kind": "Panel",
+        "spec": {
+          "id": 11,
+          "title": "AMG8833 - Thermal Pixel Matrix 8×8",
+          "description": "8x8 Thermal Grid Heatmap using Grafana Built-in Table Panel",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "plantcare-influxdb"
+                      },
+                      "spec": {
+                        "query": "import \"strings\"\n\nfrom(bucket: \"plantcare\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) =>\n    r._measurement == \"plantcare_thermal\" and\n    r.data_source == \"real\" and\n    r._field =~ /^p[0-7][0-7]$/\n  )\n  |> last()\n  |> map(fn: (r) => ({\n    row: int(v: strings.substring(v: r._field, start: 1, end: 2)),\n    col: strings.substring(v: r._field, start: 2, end: 3),\n    _value: r._value\n  }))\n  |> group()\n  |> pivot(\n    rowKey: [\"row\"],\n    columnKey: [\"col\"],\n    valueColumn: \"_value\"\n  )\n  |> sort(columns: [\"row\"])\n  |> drop(columns: [\"row\"]) // 🌟 เพิ่มบรรทัดนี้เพื่อลบคอลัมน์ row ออก"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "13.2.2",
+            "spec": {
+              "options": {
+                "cellHeight": "lg",
+                "enablePagination": false,
+                "frozenColumns": {
+                  "left": 1
+                },
+                "showHeader": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "celsius",
+                  "decimals": 1,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "#580084"
+                      },
+                      {
+                        "value": 26,
+                        "color": "dark-blue"
+                      },
+                      {
+                        "value": 28,
+                        "color": "blue"
+                      },
+                      {
+                        "value": 30,
+                        "color": "semi-dark-green"
+                      },
+                      {
+                        "value": 31,
+                        "color": "dark-yellow"
+                      },
+                      {
+                        "value": 32,
+                        "color": "dark-orange"
+                      },
+                      {
+                        "value": 33,
+                        "color": "dark-red"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "custom": {
+                    "align": "center",
+                    "cellOptions": {
+                      "mode": "gradient",
+                      "type": "color-background"
+                    },
+                    "footer": {
+                      "reducers": []
+                    },
+                    "inspect": false,
+                    "minWidth": 50,
+                    "width": 62
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
       "panel-2": {
         "kind": "Panel",
         "spec": {
@@ -289,7 +396,7 @@
                         "name": "plantcare-influxdb"
                       },
                       "spec": {
-                        "query": "\r\nfrom(bucket: \"plantcare\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"plantcare_thermal\" and\r\n    (r._field == \"t_min_c\" or\r\n     r._field == \"t_max_c\") and\r\n    r.data_source == \"real\"\r\n  )\r\n  |> aggregateWindow(\r\n    every: 1m,\r\n    fn: last,\r\n    createEmpty: false\r\n  )\r\n"
+                        "query": "\nfrom(bucket: \"plantcare\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) =>\n    r._measurement == \"plantcare_thermal\" and\n    (r._field == \"t_min_c\" or\n     r._field == \"t_max_c\") and\n    r.data_source == \"real\"\n  )\n  |> aggregateWindow(\n    every: 1m,\n    fn: last,\n    createEmpty: false\n  )\n"
                       }
                     },
                     "refId": "A",
@@ -451,7 +558,7 @@
                         "name": "plantcare-influxdb"
                       },
                       "spec": {
-                        "query": "\r\nfrom(bucket: \"plantcare\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"plantcare_soil\" and\r\n    r.data_source == \"real\" and\r\n    (\r\n      r._field == \"soil_adc_raw\" or\r\n      r._field == \"soil_adc_filtered\"\r\n    )\r\n  )\r\n  |> aggregateWindow(\r\n    every: 1m,\r\n    fn: last,\r\n    createEmpty: false\r\n  )\r\n"
+                        "query": "\nfrom(bucket: \"plantcare\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) =>\n    r._measurement == \"plantcare_soil\" and\n    r.data_source == \"real\" and\n    (\n      r._field == \"soil_adc_raw\" or\n      r._field == \"soil_adc_filtered\"\n    )\n  )\n  |> aggregateWindow(\n    every: 1m,\n    fn: last,\n    createEmpty: false\n  )\n"
                       }
                     },
                     "refId": "A",
@@ -608,7 +715,7 @@
                         "name": "plantcare-influxdb"
                       },
                       "spec": {
-                        "query": "\r\nfrom(bucket: \"plantcare\")\r\n  |> range(start: -15m)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"plantcare_soil\" and\r\n    r._field == \"relative_wetness_pct\" and\r\n    r.data_source == \"real\" and\r\n    r.device_id == \"esp32_01\"\r\n  )\r\n  |> last()\r\n"
+                        "query": "\nfrom(bucket: \"plantcare\")\n  |> range(start: -15m)\n  |> filter(fn: (r) =>\n    r._measurement == \"plantcare_soil\" and\n    r._field == \"relative_wetness_pct\" and\n    r.data_source == \"real\" and\n    r.device_id == \"esp32_01\"\n  )\n  |> last()\n"
                       }
                     },
                     "refId": "A",
@@ -700,7 +807,7 @@
                         "name": "plantcare-influxdb"
                       },
                       "spec": {
-                        "query": "\r\nfrom(bucket: \"plantcare\")\r\n  |> range(start: -15m)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"plantcare_thermal\" and\r\n    r._field == \"t_max_c\" and\r\n    r.data_source == \"real\" and\r\n    r.device_id == \"esp32_01\"\r\n  )\r\n  |> last()\r\n"
+                        "query": "\nfrom(bucket: \"plantcare\")\n  |> range(start: -15m)\n  |> filter(fn: (r) =>\n    r._measurement == \"plantcare_thermal\" and\n    r._field == \"t_max_c\" and\n    r.data_source == \"real\" and\n    r.device_id == \"esp32_01\"\n  )\n  |> last()\n"
                       }
                     },
                     "refId": "A",
@@ -784,7 +891,7 @@
                         "name": "plantcare-influxdb"
                       },
                       "spec": {
-                        "query": "\r\nfrom(bucket: \"plantcare\")\r\n  |> range(start: -7d)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"plantcare_soil\" and\r\n    r._field == \"relative_wetness_pct\" and\r\n    r.data_source == \"real\" and\r\n    r.device_id == \"esp32_01\"\r\n  )\r\n  |> last()\r\n  |> map(fn: (r) => ({\r\n    r with\r\n    _value: float(\r\n      v: uint(v: now()) - uint(v: r._time)\r\n    ) / 60000000000.0,\r\n    _time: now(),\r\n    _field: \"minutes_since_last\"\r\n  }))\r\n"
+                        "query": "\nfrom(bucket: \"plantcare\")\n  |> range(start: -7d)\n  |> filter(fn: (r) =>\n    r._measurement == \"plantcare_soil\" and\n    r._field == \"relative_wetness_pct\" and\n    r.data_source == \"real\" and\n    r.device_id == \"esp32_01\"\n  )\n  |> last()\n  |> map(fn: (r) => ({\n    r with\n    _value: float(\n      v: uint(v: now()) - uint(v: r._time)\n    ) / 60000000000.0,\n    _time: now(),\n    _field: \"minutes_since_last\"\n  }))\n"
                       }
                     },
                     "refId": "A",
@@ -872,7 +979,7 @@
                         "name": "plantcare-influxdb"
                       },
                       "spec": {
-                        "query": "\r\nfrom(bucket: \"plantcare\")\r\n  |> range(\r\n    start: v.timeRangeStart,\r\n    stop: v.timeRangeStop\r\n  )\r\n  |> filter(fn: (r) =>\r\n    r.data_source == \"real\" and\r\n    (\r\n      r._measurement == \"plantcare_soil\" or\r\n      r._measurement == \"plantcare_thermal\"\r\n    )\r\n  )\r\n  |> aggregateWindow(\r\n    every: 1m,\r\n    fn: last,\r\n    createEmpty: false\r\n  )\r\n  |> group(columns: [])\r\n  |> pivot(\r\n    rowKey: [\"_time\", \"plant_id\", \"device_id\"],\r\n    columnKey: [\"_measurement\", \"_field\"],\r\n    valueColumn: \"_value\"\r\n  )\r\n  |> keep(columns: [\r\n    \"_time\",\r\n    \"plant_id\",\r\n    \"device_id\",\r\n    \"plantcare_soil_soil_adc_raw\",\r\n    \"plantcare_soil_soil_adc_filtered\",\r\n    \"plantcare_soil_relative_wetness_pct\",\r\n    \"plantcare_thermal_t_min_c\",\r\n    \"plantcare_thermal_t_max_c\",\r\n    \"plantcare_thermal_t_left_c\",\r\n    \"plantcare_thermal_t_right_c\",\r\n    \"plantcare_thermal_delta_t_c\"\r\n  ])\r\n  |> sort(columns: [\"_time\"], desc: true)\r\n"
+                        "query": "\nfrom(bucket: \"plantcare\")\n  |> range(\n    start: v.timeRangeStart,\n    stop: v.timeRangeStop\n  )\n  |> filter(fn: (r) =>\n    r.data_source == \"real\" and\n    (\n      r._measurement == \"plantcare_soil\" or\n      r._measurement == \"plantcare_thermal\"\n    )\n  )\n  |> aggregateWindow(\n    every: 1m,\n    fn: last,\n    createEmpty: false\n  )\n  |> group(columns: [])\n  |> pivot(\n    rowKey: [\"_time\", \"plant_id\", \"device_id\"],\n    columnKey: [\"_measurement\", \"_field\"],\n    valueColumn: \"_value\"\n  )\n  |> keep(columns: [\n    \"_time\",\n    \"plant_id\",\n    \"device_id\",\n    \"plantcare_soil_soil_adc_raw\",\n    \"plantcare_soil_soil_adc_filtered\",\n    \"plantcare_soil_relative_wetness_pct\",\n    \"plantcare_thermal_t_min_c\",\n    \"plantcare_thermal_t_max_c\",\n    \"plantcare_thermal_t_left_c\",\n    \"plantcare_thermal_t_right_c\",\n    \"plantcare_thermal_delta_t_c\"\n  ])\n  |> sort(columns: [\"_time\"], desc: true)\n"
                       }
                     },
                     "refId": "A",
@@ -976,7 +1083,7 @@
                         "name": "plantcare-influxdb"
                       },
                       "spec": {
-                        "query": "\r\nsamples =\r\n  from(bucket: \"plantcare\")\r\n    |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n    |> filter(fn: (r) =>\r\n      r.data_source == \"real\" and\r\n      r.device_id == \"esp32_01\" and\r\n      (\r\n        (r._measurement == \"plantcare_soil\" and\r\n         r._field == \"relative_wetness_pct\") or\r\n        (r._measurement == \"plantcare_thermal\" and\r\n         r._field == \"t_max_c\")\r\n      )\r\n    )\r\n    |> keep(columns: [\"_time\", \"_measurement\"])\r\n    |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      _field: if r._measurement == \"plantcare_soil\"\r\n        then \"Soil\"\r\n        else \"Thermal\",\r\n      _value: 1.0\r\n    }))\r\n    |> group(columns: [\"_field\"])\r\n    |> sort(columns: [\"_time\"])\r\n\r\n// เมื่อจุดข้อมูลห่างกันเกิน 180 วินาที\r\n// ให้เริ่มสถานะ Disconnected หลังจุดก่อนหน้า 3 นาที\r\ndisconnections =\r\n  samples\r\n    |> elapsed(unit: 1s, columnName: \"gap_s\")\r\n    |> filter(fn: (r) => r.gap_s > 180)\r\n    |> map(fn: (r) => ({\r\n      _time: time(v:\r\n        uint(v: r._time) -\r\n        uint(v: r.gap_s - 180) * uint(v: 1000000000)\r\n      ),\r\n      _field: r._field,\r\n      _value: 0.0\r\n    }))\r\n\r\n// ตรวจกรณีข้อมูลล่าสุดหยุดเข้าและยังไม่กลับมา\r\ncurrent_disconnections =\r\n  samples\r\n    |> last()\r\n    |> filter(fn: (r) =>\r\n      uint(v: now()) >\r\n      uint(v: r._time) + uint(v: 180000000000)\r\n    )\r\n    |> map(fn: (r) => ({\r\n      _time: time(v:\r\n        uint(v: r._time) + uint(v: 180000000000)\r\n      ),\r\n      _field: r._field,\r\n      _value: 0.0\r\n    }))\r\n\r\nunion(tables: [\r\n  samples,\r\n  disconnections,\r\n  current_disconnections\r\n])\r\n  |> group(columns: [\"_field\"])\r\n  |> sort(columns: [\"_time\"])\r\n  |> yield(name: \"sensor_connectivity\")\r\n"
+                        "query": "\nsamples =\n  from(bucket: \"plantcare\")\n    |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n    |> filter(fn: (r) =>\n      r.data_source == \"real\" and\n      r.device_id == \"esp32_01\" and\n      (\n        (r._measurement == \"plantcare_soil\" and\n         r._field == \"relative_wetness_pct\") or\n        (r._measurement == \"plantcare_thermal\" and\n         r._field == \"t_max_c\")\n      )\n    )\n    |> keep(columns: [\"_time\", \"_measurement\"])\n    |> map(fn: (r) => ({\n      _time: r._time,\n      _field: if r._measurement == \"plantcare_soil\"\n        then \"Soil\"\n        else \"Thermal\",\n      _value: 1.0\n    }))\n    |> group(columns: [\"_field\"])\n    |> sort(columns: [\"_time\"])\n\ndisconnections =\n  samples\n    |> elapsed(unit: 1s, columnName: \"gap_s\")\n    |> filter(fn: (r) => r.gap_s > 180)\n    |> map(fn: (r) => ({\n      _time: time(v:\n        uint(v: r._time) -\n        uint(v: r.gap_s - 180) * uint(v: 1000000000)\n      ),\n      _field: r._field,\n      _value: 0.0\n    }))\n\ncurrent_disconnections =\n  samples\n    |> last()\n    |> filter(fn: (r) =>\n      uint(v: now()) >\n      uint(v: r._time) + uint(v: 180000000000)\n    )\n    |> map(fn: (r) => ({\n      _time: time(v:\n        uint(v: r._time) + uint(v: 180000000000)\n      ),\n      _field: r._field,\n      _value: 0.0\n    }))\n\nunion(tables: [\n  samples,\n  disconnections,\n  current_disconnections\n])\n  |> group(columns: [\"_field\"])\n  |> sort(columns: [\"_time\"])\n  |> yield(name: \"sensor_connectivity\")\n"
                       }
                     },
                     "refId": "A",
@@ -1082,7 +1189,7 @@
                         "name": "plantcare-influxdb"
                       },
                       "spec": {
-                        "query": "\r\nfrom(bucket: \"plantcare\")\r\n  |> range(start: -3m)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"plantcare_thermal\" and\r\n    r.data_source == \"real\" and\r\n    r.device_id == \"esp32_01\" and\r\n    (\r\n      r._field == \"t_max_c\" or\r\n      r._field == \"delta_t_c\"\r\n    )\r\n  )\r\n  |> group(columns: [])\r\n  |> pivot(\r\n    rowKey: [\"_time\"],\r\n    columnKey: [\"_field\"],\r\n    valueColumn: \"_value\"\r\n  )\r\n  |> filter(fn: (r) =>\r\n    exists r.t_max_c and\r\n    exists r.delta_t_c\r\n  )\r\n  |> sort(columns: [\"_time\"], desc: true)\r\n  |> limit(n: 1)\r\n  |> map(fn: (r) => ({\r\n    _time: r._time,\r\n    _field: \"thermal_exposure\",\r\n    _value:\r\n      if r.t_max_c >= 35.0 then 2.0\r\n      else if r.delta_t_c >= 2.0 then 1.0\r\n      else 0.0\r\n  }))\r\n  |> yield(name: \"thermal_exposure\")\r\n"
+                        "query": "\nfrom(bucket: \"plantcare\")\n  |> range(start: -3m)\n  |> filter(fn: (r) =>\n    r._measurement == \"plantcare_thermal\" and\n    r.data_source == \"real\" and\n    r.device_id == \"esp32_01\" and\n    (\n      r._field == \"t_max_c\" or\n      r._field == \"delta_t_c\"\n    )\n  )\n  |> group(columns: [])\n  |> pivot(\n    rowKey: [\"_time\"],\n    columnKey: [\"_field\"],\n    valueColumn: \"_value\"\n  )\n  |> filter(fn: (r) =>\n    exists r.t_max_c and\n    exists r.delta_t_c\n  )\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 1)\n  |> map(fn: (r) => ({\n    _time: r._time,\n    _field: \"thermal_exposure\",\n    _value:\n      if r.t_max_c >= 35.0 then 2.0\n      else if r.delta_t_c >= 2.0 then 1.0\n      else 0.0\n  }))\n  |> yield(name: \"thermal_exposure\")\n"
                       }
                     },
                     "refId": "A",
@@ -1287,8 +1394,21 @@
             "spec": {
               "x": 0,
               "y": 17,
-              "width": 24,
-              "height": 7,
+              "width": 7,
+              "height": 13,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-11"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 7,
+              "y": 17,
+              "width": 17,
+              "height": 13,
               "element": {
                 "kind": "ElementReference",
                 "name": "panel-7"
@@ -1322,7 +1442,7 @@
       "hideTimepicker": false,
       "fiscalYearStartMonth": 0
     },
-    "title": "PlantcareIOT",
+    "title": "PlantCare-IOT",
     "variables": [
       {
         "kind": "DatasourceVariable",
