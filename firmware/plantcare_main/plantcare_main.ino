@@ -1,7 +1,5 @@
 /*
- * ============================================================
  * PlantCare IoT - Portulaca Thermal and Soil Monitoring
- * ============================================================
  *
  * ไฟล์: plantcare_main.ino
  * อุปกรณ์หลัก: ESP32-WROOM-32 บน NECTEC I-KIT Version 2.1
@@ -15,7 +13,7 @@
  * 5. แสดงข้อมูลบน LCD 16x2 ของ I-KIT
  * 6. แสดงข้อมูลผ่าน Arduino Serial Monitor
  * 7. เปิด HTTP JSON สำหรับ Local Dashboard
- * 8. ส่ง Soil + Thermal JSON ขึ้น Node-RED HTTPS ทุก 60 วินาที
+ * 8. ส่ง Soil + Thermal JSON ขึ้น Node-RED HTTPS ทุก 2 วินาที
  *
  * การต่อเซนเซอร์:
  *
@@ -35,9 +33,7 @@
  *   โปรแกรมรองรับ I2C Address 0x27 และ 0x3F
  *   ต้องตรวจว่า LCD ใช้ Bus และแรงดันที่เข้ากันได้
  *
- * ------------------------------------------------------------
  * ข้อมูล Soil Calibration จากภาพวันที่ 20-22 October 2026
- * ------------------------------------------------------------
  *
  * ก่อนรดน้ำ 4 รอบ:
  *   2770, 2622, 2559, 2505
@@ -47,16 +43,19 @@
  *   2307, 2238, 2226, 2323
  *   Average = 2273.5 ADC
  *
- * ค่าอ้างอิง:
- *   ADC 2614 -> 0% Relative Wetness Index
- *   ADC 2274 -> 100% Relative Wetness Index
+ * สเกลดัชนีแสดงผลตามช่วงที่ผู้ใช้ระบุ (16 November 2026):
+ *   ADC 2356 -> 40% และ ADC 2390 -> 30%
+ *   คำนวณจุดอ้างอิงการแสดงผลได้ 2492 -> 0% และ 2152 -> 100%
+ *   ช่วงอ้างอิง 340 ADC และ ADC ประมาณ 2431 -> 18%
+ *   เป็นสเกลแสดงผลที่กำหนด ไม่ใช่ผลวัด dry/wet ใหม่
+ *   ข้อมูลค่าเฉลี่ย 4 รอบด้านบนเก็บไว้เป็นประวัติ ไม่ใช่สเกลปัจจุบัน
  *
  * สำคัญ:
- * - 0% ไม่ใช่ดินแห้งสนิท
- * - 100% ไม่ใช่ดินอิ่มน้ำ 100%
- * - เป็นดัชนีเปรียบเทียบช่วงก่อนและหลังรดน้ำเท่านั้น
- * - ไม่ใช้ค่า Index สั่งรดน้ำอัตโนมัติ
- * - ต้องเก็บ Raw ADC ควบคู่กับ Index เสมอ
+ * 0% ไม่ใช่ดินแห้งสนิท
+ * 100% ไม่ใช่ดินอิ่มน้ำ 100%
+ * เป็นดัชนีเปรียบเทียบช่วงก่อนและหลังรดน้ำเท่านั้น
+ * ไม่ใช้ค่า Index สั่งรดน้ำอัตโนมัติ
+ * ต้องเก็บ Raw ADC ควบคู่กับ Index เสมอ
  *
  * Software Architecture:
  *
@@ -80,12 +79,10 @@
  * อย่า Commit/Push ไฟล์ที่มีรหัสลับไปยัง Git Repository
  */
 
-//-- 1. Libraries
-// ------------------------------------------------------------
+// 1. Libraries
 
 // ไลบรารีพื้นฐานของ Arduino ESP32
 #include <Arduino.h>
-#include "credentials.h"
 
 // ใช้เชื่อมต่อเครือข่าย Wi-Fi
 #include <WiFi.h>
@@ -110,19 +107,24 @@
 #include <WiFiClientSecure.h>
 
 
-//-- 2. Wi-Fi Configuration
-// ------------------------------------------------------------
+// 2. Wi-Fi Configuration
+
+// อ่านค่าลับจากไฟล์ในเครื่อง ซึ่งถูกกันออกจาก Git ด้วย .gitignore
+#include "credentials.h"
 
 // ใส่ Wi-Fi ของหอพักในเครื่องตัวเองเท่านั้น
+
+
 
 // API Key ต้องอยู่ภายใน double quotes (ไม่ใส่เครื่องหมายซ้อนกัน)
 // ค่านี้ต้องตรงกับ PLANTCARE_INGEST_KEY ที่ตั้งใน Node-RED
 
-const unsigned long CLOUD_UPLOAD_INTERVAL_MS = 60000UL;
 
 
-//-- 3. Hardware Configuration
-// ------------------------------------------------------------
+const unsigned long CLOUD_UPLOAD_INTERVAL_MS = 2000UL;
+
+
+// 3. Hardware Configuration
 
 // Soil Moisture ใช้ GPIO34 ซึ่งเป็น ADC1
 // ทำให้สามารถอ่าน Analog ขณะเปิด Wi-Fi ได้
@@ -138,18 +140,19 @@ const int I2C_SCL_PIN = 22;
 const bool ENABLE_LCD = true;
 
 
-//-- 4. Soil Calibration from Observations
-// ------------------------------------------------------------
+// 4. Soil Calibration from Observations
 
-// ค่าเฉลี่ยก่อนรดน้ำ
-// เป็นด้านที่ชื้นน้อยกว่าในช่วงที่เก็บข้อมูล
-// ไม่ได้หมายถึงดินแห้งสนิท
-const float SOIL_BEFORE_WATER_REF = 2614.0f;
+// ตั้งสเกลดัชนีให้ตรงช่วงการแสดงผลที่ผู้ใช้ระบุจากภาพล่าสุด
+// จุดอ้างอิงคือ ADC 2356 แสดง 40% และ ADC 2390 แสดง 30%
+// ช่วง 34 ADC เท่ากับ 10 percentage points จึงได้ช่วงสเกล 340 ADC
+// สูตรเดิมให้จุด 0% ที่ 2492 และจุด 100% ที่ 2152
+// ADC 2378 ได้ประมาณ 33.5% และ ADC 2431 ได้ประมาณ 17.9%
+// ชื่อค่าคงที่คงไว้ตามโค้ดเดิม แต่เลขนี้เป็นขอบสเกลแสดงผล
+// ไม่ใช่ค่าเฉลี่ยก่อนหรือหลังรดน้ำที่วัดใหม่ และไม่ผูกค่ากับช่วงเวลา
 
-// ค่าเฉลี่ยหลังรดน้ำทันที
-// เป็นด้านที่ชื้นมากกว่าในช่วงที่เก็บข้อมูล
-// ไม่ได้หมายถึงดินมีน้ำ 100% ทางกายภาพ
-const float SOIL_AFTER_WATER_REF = 2274.0f;
+const float SOIL_BEFORE_WATER_REF = 2492.0f;
+
+const float SOIL_AFTER_WATER_REF = 2152.0f;
 
 // จำนวนการอ่าน ADC ต่อหนึ่งรอบ
 // การเฉลี่ยหลายตัวอย่างช่วยลด Noise ระยะสั้น
@@ -161,8 +164,7 @@ const int SOIL_SAMPLE_COUNT = 20;
 const float SOIL_EMA_ALPHA = 0.25f;
 
 
-//-- 5. Sampling and Display Timing
-// ------------------------------------------------------------
+// 5. Sampling and Display Timing
 
 // อ่าน Soil และ Thermal ทุก 2 วินาที
 const unsigned long SAMPLE_INTERVAL_MS = 2000;
@@ -178,8 +180,7 @@ const unsigned long LCD_PAGE_INTERVAL_MS = 6000;
 const unsigned long RETRY_INTERVAL_MS = 10000;
 
 
-//-- 6. Global Objects
-// ------------------------------------------------------------
+// 6. Global Objects
 
 // ออบเจ็กต์สำหรับ Thermal Sensor
 Adafruit_AMG88xx amg;
@@ -197,8 +198,7 @@ LiquidCrystal_I2C lcd3F(0x3F, 16, 2);
 LiquidCrystal_I2C* lcd = nullptr;
 
 
-//-- 7. Global Sensor Data
-// ------------------------------------------------------------
+// 7. Global Sensor Data
 
 // Soil ADC เฉลี่ยจากตัวอย่างล่าสุด 20 ค่า
 int soilRaw = 0;
@@ -240,8 +240,7 @@ unsigned long lastWiFiRetryAt = 0;
 unsigned long lastCloudAttemptAt = 0;
 
 
-//-- 8. I2C Helper Functions
-// ------------------------------------------------------------
+// 8. I2C Helper Functions
 
 // ตรวจว่ามีอุปกรณ์ตอบสนองที่ I2C Address นี้หรือไม่
 bool hasI2CDevice(uint8_t address) {
@@ -275,8 +274,7 @@ void scanI2CDevices() {
 }
 
 
-//-- 9. Initialize AMG8833
-// ------------------------------------------------------------
+// 9. Initialize AMG8833
 
 // เริ่ม AMG8833 โดยทดลอง Address 0x69 ก่อน
 // หากไม่สำเร็จจะลอง Address 0x68
@@ -311,20 +309,19 @@ bool initializeAMG8833() {
 }
 
 
-//-- 10. Initialize LCD1602
-// ------------------------------------------------------------
+// 10. Initialize LCD1602
 
 // ฟังก์ชันนี้แก้ปัญหา ENABLE_LCD = false ในโค้ดเดิม
 // โดยทดลองค้นหาจอ LCD บน I2C Bus
 //
 // ถ้าพบ:
-//   - เริ่มต้นจอ
-//   - เปิด Backlight
-//   - แสดงข้อความเริ่มต้น
+//   เริ่มต้นจอ
+//   เปิด Backlight
+//   แสดงข้อความเริ่มต้น
 //
 // ถ้าไม่พบ:
-//   - รายงานผ่าน Serial Monitor
-//   - ระบบ Soil, Thermal และ Web ยังทำงานต่อ
+//   รายงานผ่าน Serial Monitor
+//   ระบบ Soil, Thermal และ Web ยังทำงานต่อ
 void initializeLCD() {
 
   if (!ENABLE_LCD) {
@@ -362,8 +359,7 @@ void initializeLCD() {
 }
 
 
-//-- 11. Read Soil ADC
-// ------------------------------------------------------------
+// 11. Read Soil ADC
 
 // อ่าน ADC 20 ครั้งและหาค่าเฉลี่ย
 // ช่วยลด Noise เมื่อค่า ADC แกว่งระยะสั้น
@@ -392,20 +388,19 @@ bool isSoilReadingUsable(int raw) {
 }
 
 
-//-- 12. Calculate Relative Wetness Index
-// ------------------------------------------------------------
+// 12. Calculate Relative Wetness Index
 
 // สูตรคำนวณ:
 //
 // Relative Wetness Index (%) =
-//  (BeforeWaterReference - CurrentADC)
-//  ----------------------------------- x 100
-//  (BeforeWaterReference - AfterWaterReference)
+// ((BeforeWaterReference - CurrentADC) /
+//  (BeforeWaterReference - AfterWaterReference)) x 100
 //
 // ADC ต่ำลง -> ดัชนีเพิ่มขึ้น
 // ADC สูงขึ้น -> ดัชนีลดลง
 //
-// ช่วงอ้างอิงนี้ได้จากการสังเกต 4 รอบก่อนและหลังรดน้ำ
+// ขอบสเกล 100% อยู่ที่ ADC 2152 ตามจุดอ้างอิงการแสดงผลที่กำหนด
+// ขอบสเกล 0% อยู่ที่ ADC 2492 ตามจุดอ้างอิงการแสดงผลที่กำหนด
 // ไม่ใช่ Calibration ของ Volumetric Water Content
 float calculateRelativeWetness(float currentADC) {
 
@@ -427,8 +422,7 @@ float calculateRelativeWetness(float currentADC) {
 }
 
 
-//-- 13. Soil Status Classification
-// ------------------------------------------------------------
+// 13. Soil Status Classification
 
 // สร้างข้อความภาษาอังกฤษสำหรับเว็บและ Serial
 // ข้อความนี้อธิบายตำแหน่งในช่วงทดลอง
@@ -439,29 +433,29 @@ const char* getSoilStatus() {
     return "Sensor reading unavailable";
   }
 
-  // ค่า ADC ต่ำกว่าค่าเฉลี่ยหลังรดน้ำ
+  // ค่า ADC ต่ำกว่าขอบสเกลแสดงผล 100%
   if (soilFiltered < SOIL_AFTER_WATER_REF) {
-    return "Wetter than observed reference";
+    return "ADC below display reference range";
   }
 
-  // ค่า ADC สูงกว่าค่าเฉลี่ยก่อนรดน้ำ
+  // ค่า ADC สูงกว่าขอบสเกลแสดงผล 0%
   if (soilFiltered > SOIL_BEFORE_WATER_REF) {
-    return "Below observed wetness range - check soil";
+    return "ADC above display reference range";
   }
 
   if (relativeWetnessPct >= 80.0f) {
-    return "High relative wetness - recently watered";
+    return "High relative wetness - check soil condition";
   }
 
   if (relativeWetnessPct >= 50.0f) {
-    return "Moister than pre-watering baseline";
+    return "Above lower display-index range";
   }
 
   if (relativeWetnessPct >= 20.0f) {
     return "Intermediate observed wetness";
   }
 
-  return "Near pre-watering baseline - monitor soil";
+  return "Near zero-index display reference";
 }
 
 
@@ -497,8 +491,7 @@ const char* getSoilShortStatus() {
 }
 
 
-//-- 14. Read AMG8833 Thermal Frame
-// ------------------------------------------------------------
+// 14. Read AMG8833 Thermal Frame
 
 // AMG8833 มี Thermal Pixels จำนวน 64 จุด
 // อ่านค่าแล้วหาต่ำสุดและสูงสุด
@@ -558,8 +551,7 @@ bool readThermalFrame() {
 }
 
 
-//-- 15. Sample Soil and Thermal Sensors
-// ------------------------------------------------------------
+// 15. Sample Soil and Thermal Sensors
 
 // อ่านเซนเซอร์ทั้งสองตัวในรอบเดียวกัน
 //
@@ -609,8 +601,7 @@ void sampleSensors() {
 }
 
 
-//-- 16. LCD Utility Functions
-// ------------------------------------------------------------
+// 16. LCD Utility Functions
 
 // แสดงข้อความบน LCD โดยจำกัดความยาว 16 ตัวอักษร
 // และลบตัวอักษรเก่าที่อาจค้างจากการอัปเดตก่อนหน้า
@@ -634,8 +625,7 @@ void printLCDLine(int row, String message) {
 }
 
 
-//-- 17. Update LCD1602
-// ------------------------------------------------------------
+// 17. Update LCD1602
 
 // เนื่องจาก LCD มี 2 บรรทัด จึงสลับแสดงสองหน้า
 //
@@ -707,16 +697,15 @@ void updateLCD() {
 }
 
 
-//-- 18. Serial Monitor Output
-// ------------------------------------------------------------
+// 18. Serial Monitor Output
 
 // แสดงค่า Soil, Relative Wetness Index, Thermal
 // และ IP ของ ESP32 ผ่าน USB Serial Monitor
 //
 // ประโยชน์:
-// - ตรวจสอบข้อมูลโดยไม่ต้องเปิด Browser
-// - เปรียบเทียบ ADC กับ % ที่คำนวณได้
-// - ตรวจสอบว่า Thermal Sensor อ่านข้อมูลจริง
+// ตรวจสอบข้อมูลโดยไม่ต้องเปิด Browser
+// เปรียบเทียบ ADC กับ % ที่คำนวณได้
+// ตรวจสอบว่า Thermal Sensor อ่านข้อมูลจริง
 void printSerialData() {
 
   Serial.println();
@@ -746,7 +735,7 @@ void printSerialData() {
   Serial.println(getSoilStatus());
 
   Serial.println(
-    "[SOIL] Method: Experimental before/after mean"
+    "[SOIL] Method: User display scale ADC 2356=40%, 2390=30% (2026-11-16)"
   );
 
   if (thermalReady) {
@@ -784,14 +773,13 @@ void printSerialData() {
 }
 
 
-//-- 19. Embedded Web Dashboard
-// ------------------------------------------------------------
+// 19. Embedded Web Dashboard
 
 // หน้าเว็บ HTML/CSS/JavaScript ฝังอยู่ใน Firmware
 // ไม่ต้องติดตั้ง Web Server บน Laptop
 //
 // Browser เปิด:
-//   http://device.example.invalid
+//   http://ESP32_IP/
 //
 // Thermal Panel:
 //   Fetch /thermal แล้วสร้าง Heatmap
@@ -1022,12 +1010,16 @@ Portulaca Plant Monitoring | ESP32 + AMG8833
     </div>
 
     <p class="note">
-      0% = average before watering (ADC 2614).
-      100% = average immediately after watering
-      (ADC 2274).
+    Experimental Relative Wetness Index.
 
-      These are experimental reference values,
-      not true soil water percentages.
+    0% display reference = ADC 2492.
+    100% display reference = ADC 2152.
+
+    Display scale: ADC 2356 = 40%, ADC 2390 = 30%.
+    16 November 2026.
+
+    These values represent relative sensor readings,
+    not actual soil water content.
     </p>
   </section>
 
@@ -1040,8 +1032,7 @@ Portulaca Plant Monitoring | ESP32 + AMG8833
 </div>
 
 <script>
-//-- 19.1 Thermal Heatmap JavaScript
-// ------------------------------------------------------------
+// 19.1 Thermal Heatmap JavaScript
 
 // รับข้อมูลจาก /thermal เป็น Array จำนวน 64 ค่า
 // จากนั้นขยายเป็นภาพ Heatmap ขนาด 64x64
@@ -1216,8 +1207,7 @@ async function updateThermal() {
 }
 
 
-//-- 19.2 Soil Moisture JavaScript
-// ------------------------------------------------------------
+// 19.2 Soil Moisture JavaScript
 
 // รับ Soil JSON จาก /soil
 // แล้วแสดงเปอร์เซ็นต์ทดลอง พร้อม ADC
@@ -1278,7 +1268,7 @@ async function updateSoil() {
     ).textContent =
       'ADC Average: ' + data.raw +
       ' | Filtered: ' + data.filtered_raw +
-      ' | Calibration: Experimental';
+      ' | Display references: 2492 / 2152';
 
   } catch (error) {
 
@@ -1291,8 +1281,7 @@ async function updateSoil() {
 }
 
 
-//-- 19.3 Web Refresh Loop
-// ------------------------------------------------------------
+// 19.3 Web Refresh Loop
 
 // ดึงข้อมูลทันทีเมื่อเปิดหน้าเว็บ
 updateThermal();
@@ -1308,8 +1297,7 @@ setInterval(updateSoil, 2000);
 )HTML";
 
 
-//-- 20. HTTP Root Handler
-// ------------------------------------------------------------
+// 20. HTTP Root Handler
 
 // ส่งหน้า Web Dashboard ให้ Browser เมื่อเปิด /
 void handleRoot() {
@@ -1324,8 +1312,7 @@ void handleRoot() {
 }
 
 
-//-- 21. HTTP Thermal JSON
-// ------------------------------------------------------------
+// 21. HTTP Thermal JSON
 
 // HTTP GET /thermal
 // ส่งค่าจาก AMG8833 จำนวน 64 Pixels
@@ -1362,8 +1349,7 @@ void handleThermal() {
 }
 
 
-//-- 22. HTTP Soil JSON
-// ------------------------------------------------------------
+// 22. HTTP Soil JSON
 
 // HTTP GET /soil
 // ส่งข้อมูล Soil สำหรับ Web Dashboard
@@ -1418,7 +1404,7 @@ void handleSoil() {
   json += String(SOIL_AFTER_WATER_REF, 0);
 
   json += ",\"calibration_method\":";
-  json += "\"observed_before_after_mean\"";
+  json += "\"user_display_scale_adc2356_40_adc2390_30_20261116\"";
 
   json += ",\"calibrated_absolute_moisture\":false";
 
@@ -1431,8 +1417,7 @@ void handleSoil() {
 }
 
 
-//-- 23. HTTP Device Status JSON
-// ------------------------------------------------------------
+// 23. HTTP Device Status JSON
 
 // HTTP GET /status
 // แสดงว่า ESP32 และแต่ละ Sensor พร้อมหรือไม่
@@ -1479,16 +1464,15 @@ void handleStatus() {
 }
 
 
-//-- 24. Wi-Fi Connection
-// ------------------------------------------------------------
+// 24. Wi-Fi Connection
 
 // เชื่อมต่อ Wi-Fi ผ่านข้อมูลในไฟล์เดียวกัน
 //
 // ถ้า Wi-Fi ใช้งานไม่ได้:
-// - LCD ยังแสดงผลได้
-// - Serial Monitor ยังแสดงผลได้
-// - Sensor ยังอ่านค่าได้
-// - แต่ Web Dashboard จะยังเข้าถึงไม่ได้
+// LCD ยังแสดงผลได้
+// Serial Monitor ยังแสดงผลได้
+// Sensor ยังอ่านค่าได้
+// แต่ Web Dashboard จะยังเข้าถึงไม่ได้
 void connectWiFi() {
 
   WiFi.mode(WIFI_STA);
@@ -1528,8 +1512,7 @@ void connectWiFi() {
 }
 
 
-//-- 25. Start HTTP Web Server
-// ------------------------------------------------------------
+// 25. Start HTTP Web Server
 
 // ลงทะเบียน HTTP URL สำหรับหน้าเว็บและ JSON
 //
@@ -1556,19 +1539,33 @@ void startWebServer() {
 }
 
 
-//-- 25.1 Cloud HTTPS Uploader (Node-RED -> InfluxDB)
-// ------------------------------------------------------------
+// 25.1 Cloud HTTPS Uploader (Node-RED -> InfluxDB)
 // Root CA from Let's Encrypt: ISRG Root X2 (self-signed).
 // SHA-256 fingerprint: 69729B8E15A86EFC177A57AFB7171DFC64ADD28C2FCA8CF1507E34453CCB1470
 // The HTTPS server must present a chain ending in this root.
 // A secure clock (NTP) is needed to check certificate dates.
-
+static const char CLOUD_ROOT_CA[] = R"PEM(
+-----BEGIN CERTIFICATE-----
+MIICGzCCAaGgAwIBAgIQQdKd0XLq7qeAwSxs6S+HUjAKBggqhkjOPQQDAzBPMQsw
+CQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJuZXQgU2VjdXJpdHkgUmVzZWFyY2gg
+R3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBYMjAeFw0yMDA5MDQwMDAwMDBaFw00
+MDA5MTcxNjAwMDBaME8xCzAJBgNVBAYTAlVTMSkwJwYDVQQKEyBJbnRlcm5ldCBT
+ZWN1cml0eSBSZXNlYXJjaCBHcm91cDEVMBMGA1UEAxMMSVNSRyBSb290IFgyMHYw
+EAYHKoZIzj0CAQYFK4EEACIDYgAEzZvVn4CDCuwJSvMWSj5cz3es3mcFDR0HttwW
++1qLFNvicWDEukWVEYmO6gbf9yoWHKS5xcUy4APgHoIYOIvXRdgKam7mAHf7AlF9
+ItgKbppbd9/w+kHsOdx1ymgHDB/qo0IwQDAOBgNVHQ8BAf8EBAMCAQYwDwYDVR0T
+AQH/BAUwAwEB/zAdBgNVHQ4EFgQUfEKWrt5LSDv6kviejM9ti6lyN5UwCgYIKoZI
+zj0EAwMDaAAwZQIwe3lORlCEwkSHRhtFcP9Ymd70/aTSVaYgLXTWNLxBo1BfASdW
+tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
+/q4AaOeMSQ+2b1tbFfLn
+-----END CERTIFICATE-----
+)PEM";
 
 void beginCloudUploader() {
   lastCloudAttemptAt = millis();
   // Set system time in UTC; server generates the database timestamp.
   configTime(0, 0, "pool.ntp.org", "time.google.com");
-  Serial.println("[CLOUD] HTTPS uploader initialized (60-second interval)");
+  Serial.println("[CLOUD] HTTPS uploader initialized (2-second interval)");
 }
 
 // Uses the last values read in sampleSensors(): no second sensor read.
@@ -1655,8 +1652,7 @@ void uploadCloudIfDue() {
   https.end();
 }
 
-//-- 26. Arduino setup()
-// ------------------------------------------------------------
+// 26. Arduino setup()
 
 // setup() ทำงานหนึ่งครั้งเมื่อเปิดเครื่องหรือกด Reset
 //
@@ -1731,17 +1727,16 @@ void setup() {
 }
 
 
-//-- 27. Arduino loop()
-// ------------------------------------------------------------
+// 27. Arduino loop()
 
 // loop() ทำงานซ้ำตลอดเวลาที่ ESP32 เปิดอยู่
 //
 // ใช้ millis() จัดเวลาแยกงานต่าง ๆ
 // ทำให้:
-// - อ่านเซนเซอร์
-// - อัปเดต LCD
-// - แสดง Serial
-// - รับ HTTP Request
+// อ่านเซนเซอร์
+// อัปเดต LCD
+// แสดง Serial
+// รับ HTTP Request
 // สามารถทำงานร่วมกันในโปรแกรมเดียว
 void loop() {
 
@@ -1802,7 +1797,7 @@ void loop() {
     server.handleClient();
   }
 
-  // ส่ง Sensor JSON ไป Node-RED ทุก 60 วินาที
+  // ส่ง Sensor JSON ไป Node-RED ทุก 2 วินาที
   uploadCloudIfDue();
 
   // พักระยะสั้น เพื่อให้ระบบ Task อื่นทำงานได้

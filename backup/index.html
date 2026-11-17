@@ -1,0 +1,46 @@
+<!doctype html>
+<!-- หลักฐานออฟไลน์จากภาพจริง: ใช้ไฟล์ใน assets เท่านั้น ไม่มีการเรียก API หรือสร้างค่าทดแทน -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+  <title>PlantCare - Offline Evidence</title>
+  <style>
+    :root{color-scheme:dark;font:16px/1.6 system-ui,sans-serif;background:#11171c;color:#e9f0f4}
+    body{margin:0}main{max-width:1440px;margin:auto;padding:32px 24px 64px}
+    header{border-bottom:1px solid #34414b;padding-bottom:24px}h1{font-size:clamp(28px,4vw,44px);line-height:1.15;margin:12px 0}
+    h2{font-size:23px;margin:0 0 8px}p{max-width:1000px;color:#c5d0d8}a{color:#75dfcc}
+    .badge{display:inline-block;border:1px solid #d8ae60;border-radius:6px;padding:5px 12px;color:#f5cc82;font-weight:700;letter-spacing:.04em}
+    nav{display:flex;gap:22px;flex-wrap:wrap;margin-top:18px}section{margin-top:32px;background:#192127;border:1px solid #34414b;border-radius:12px;padding:20px}
+    figure{margin:18px 0 0}img{display:block;width:100%;height:auto;border-radius:6px}figcaption{font-size:14px;color:#aabcc8;margin-top:10px}
+    .note{border-left:4px solid #d8ae60;padding-left:16px}.source{font-size:14px}footer{margin-top:32px;color:#aabcc8}
+    @media print{ :root{color-scheme:light;background:white;color:black}section{break-inside:avoid;background:white}p,figcaption,footer{color:#222}nav{display:none}}
+  </style>
+</head>
+<body><main>
+  <header>
+    <span class="badge">SAVED EVIDENCE · NOT LIVE DATA</span>
+    <h1>PlantCare IoT</h1>
+    <p>Soil wetness and thermal exposure monitoring for a potted plant. This offline page preserves existing project screenshots for review when Grafana, InfluxDB, or the network is unavailable.</p>
+    <p class="note">The displayed values and freshness labels belong to the original captures. They do not describe the plant's current condition. These images are evidence, not a database backup or an interactive Grafana dashboard.</p>
+    <nav aria-label="Evidence sections"><a href="#overview">Dashboard overview</a><a href="#watering">Watering response</a><a href="#gaps">Data availability</a><a href="../report/PlantCare-Final-Report.pdf">Final report</a></nav>
+  </header>
+  <section id="overview">
+    <h2>Dashboard overview</h2>
+    <p>The report identifies this as the 24-hour view on 5 November 2026. The saved dashboard includes the soil index, thermal maximum, reading age, experimental status labels, ADC trends, availability, an 8 × 8 thermal matrix, and historical rows.</p>
+    <figure><a href="assets/grafana-overview.png"><img src="assets/grafana-overview.png" alt="Saved Grafana overview with soil and thermal readings, trends, thermal matrix, and historical table"></a><figcaption>Original project image: grafana-overview.png. Open the image for full resolution. The wetness percentage is a relative index for the trial pot.</figcaption></figure>
+  </section>
+  <section id="watering">
+    <h2>Observed response around watering</h2>
+    <p>The report notes watering around 08:30 after rain and again around 17:00 on 5 November. Wetness rises while ADC readings fall around these events. The morning view cannot separate rain from manual watering. A 100% reading is the top of the relative scale.</p>
+    <figure><a href="assets/grafana-watering.png"><img src="assets/grafana-watering.png" alt="Saved wetness and raw versus filtered ADC charts around two reported watering events"></a><figcaption>Original project image: grafana-watering.png. The plot is retained as captured; no time-series values have been reconstructed.</figcaption></figure>
+  </section>
+  <section id="gaps">
+    <h2>Historical data availability</h2>
+    <p>The two-day capture shows a thermal telemetry gap around midday on 4 November while soil telemetry continues. The labels summarize gaps between received samples; they do not directly measure Wi-Fi status or identify which component failed.</p>
+    <figure><a href="assets/grafana-two-days.png"><img src="assets/grafana-two-days.png" alt="Saved two-day timeline with a thermal data gap while soil readings continue"></a><figcaption>Original project image: grafana-two-days.png. A gap longer than 180 seconds is marked as disconnected by the historical rule.</figcaption></figure>
+  </section>
+  <footer><p class="source">Source: the supplied PlantCare final-report figures and manuscript. No live requests, external fonts, scripts, or services are needed. For live monitoring, configure Node-RED, InfluxDB, and one of the Grafana dashboard JSON files.</p></footer>
+</main></body>
+</html>

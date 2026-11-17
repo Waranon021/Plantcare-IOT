@@ -1,14 +1,33 @@
-# Local configuration and runtime credentials
+# เก็บ credentials และข้อมูล runtime ไว้เฉพาะเครื่อง
 **/credentials.h
 **/secrets.h
 .env
 .env.*
-**/*_cred.json
-**/*.key
-**/*.pfx
-**/*.p12
-node_modules/
-arduino-build/
-*.aux
+!.env.example
+**/flows_cred.json
+**/flows_cred*.json
+**/.config.runtime.json
+**/node_modules/
+**/.pio/
+**/build/
+**/dist/
+**/__pycache__/
+*.pem
+*.key
+*.p12
+*.pfx
 *.log
+*.aux
 *.out
+*.synctex.gz
+*.fdb_latexmk
+*.fls
+*.toc
+*.tmp
+*.bak
+Thumbs.db
+.DS_Store
+# สไลด์และสคริปต์นำเสนอส่งแยก ไม่รวมใน repository
+*.pptx
+*Presentation-Script*
+*Video-Script*
