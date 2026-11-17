@@ -154,7 +154,7 @@ The trial's soil bands are below 17%, 17–20%, 20–70%, and at least 70%. Ther
 
 Download/clone the repository, then double-click `backup/index.html`. Keep its `assets` folder alongside it. The page works without a local server and uses no external scripts, fonts, API, or internet requests. Click an image for its original resolution.
 
-The images preserve the report's dashboard overview, watering response, and two-day data availability. **All values and freshness labels are historical, not live.** This is a submission fallback, not a time-series database restore. No raw CSV was supplied in the local project folder; no missing records have been invented.
+The images preserve the report's dashboard overview and the team's local recovered-dashboard history. The local view displays 3-17 November 2026; the 29 October start comes from the report's earlier audit. Its explanation records the shared Grafana issue, early interruptions, improved later consistency, and calibration adjustments from around 10 November. **All values and freshness labels are historical, not live.** This is a submission fallback, not a time-series database restore. No raw CSV was supplied in the local project folder; no missing records have been invented.
 
 ## Report results and evidence limits
 
@@ -172,9 +172,8 @@ Paths below are relative to the repository root. Template fonts are kept because
 | --- | --- |
 | `.gitattributes` | Text line-ending and binary file handling. |
 | `.gitignore` | Excludes private credentials, runtime outputs, slides, and presentation scripts. |
+| `backup/assets/grafana-local-history.png` | Local recovered dashboard for 3-17 November 2026, cropped only to remove the browser URL; supporting evidence with calibration caveats. Offline viewer asset. |
 | `backup/assets/grafana-overview.png` | Saved full dashboard with trends, status, thermal matrix, and history. Offline viewer asset. |
-| `backup/assets/grafana-two-days.png` | Saved two-day soil/thermal availability view. Offline viewer asset. |
-| `backup/assets/grafana-watering.png` | Saved wetness/ADC plots around the reported watering events. Offline viewer asset. |
 | `backup/index.html` | Standalone offline evidence viewer; no live requests or generated sensor values. |
 | `backup/README.md` | Offline use instructions and evidence limits. |
 | `firmware/plantcare_main/credentials.example.h` | Safe template for the untracked credentials.h used by the sketch. |

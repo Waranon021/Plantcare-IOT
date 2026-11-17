@@ -24,23 +24,24 @@
     <h1>PlantCare IoT</h1>
     <p>Soil wetness and thermal exposure monitoring for a potted plant. This offline page preserves existing project screenshots for review when Grafana, InfluxDB, or the network is unavailable.</p>
     <p class="note">The displayed values and freshness labels belong to the original captures. They do not describe the plant's current condition. These images are evidence, not a database backup or an interactive Grafana dashboard.</p>
-    <nav aria-label="Evidence sections"><a href="#overview">Dashboard overview</a><a href="#watering">Watering response</a><a href="#gaps">Data availability</a><a href="../report/PlantCare-Final-Report.pdf">Final report</a></nav>
+    <nav aria-label="Evidence sections"><a href="#overview">Dashboard overview</a><a href="#local-history">Local recovery evidence</a><a href="../report/PlantCare-Final-Report.pdf">Final report</a></nav>
   </header>
   <section id="overview">
     <h2>Dashboard overview</h2>
     <p>The report identifies this as the 24-hour view on 5 November 2026. The saved dashboard includes the soil index, thermal maximum, reading age, experimental status labels, ADC trends, availability, an 8 × 8 thermal matrix, and historical rows.</p>
     <figure><a href="assets/grafana-overview.png"><img src="assets/grafana-overview.png" alt="Saved Grafana overview with soil and thermal readings, trends, thermal matrix, and historical table"></a><figcaption>Original project image: grafana-overview.png. Open the image for full resolution. The wetness percentage is a relative index for the trial pot.</figcaption></figure>
   </section>
-  <section id="watering">
-    <h2>Observed response around watering</h2>
-    <p>The report notes watering around 08:30 after rain and again around 17:00 on 5 November. Wetness rises while ADC readings fall around these events. The morning view cannot separate rain from manual watering. A 100% reading is the top of the relative scale.</p>
-    <figure><a href="assets/grafana-watering.png"><img src="assets/grafana-watering.png" alt="Saved wetness and raw versus filtered ADC charts around two reported watering events"></a><figcaption>Original project image: grafana-watering.png. The plot is retained as captured; no time-series values have been reconstructed.</figcaption></figure>
+  <section id="local-history">
+    <h2>Local Grafana dashboard: supporting evidence</h2>
+    <p>Shortly before submission, the team experienced a problem with the shared Grafana environment. We prepared a local Grafana view as supporting evidence that PlantCare telemetry had been collected and stored in InfluxDB, and that the historical records could still be queried.</p>
+    <figure><a href="assets/grafana-local-history.png"><img src="assets/grafana-local-history.png" alt="Saved local recovered Grafana dashboard for 3 to 17 November 2026, showing wetness and thermal history, telemetry gaps, thermal pixels, and stored sensor rows"></a><figcaption>Local recovered dashboard supplied by the team. The visible selection is 3-17 November 2026, in Asia/Bangkok time. The browser address bar was removed for privacy; the plotted data and panel values are unchanged. Open the image for full resolution.</figcaption></figure>
+    <p>Our historical records extend back to 29 October, as documented in the final report's earlier CSV audit. Together with the records shown here through 17 November, this supports a collection period of more than two weeks, with interruptions. The screenshot itself displays 3-17 November; it does not show 29 October or establish uninterrupted collection.</p>
+    <p>In the early period, we observed connection interruptions, which correspond to disconnected segments in the telemetry-freshness panel. Later, the readings were recorded more consistently, although some gaps remain visible. This panel summarizes the arrival of sensor data; it does not directly measure Wi-Fi connection state.</p>
+    <p>The team observed a pattern consistent with the plant setup: wetness tended to decrease as the soil dried during the day and increase after watering. These trends support the expected sensor response, but the index is specific to this setup and does not independently establish the plant's health.</p>
+    <p>From around 10 November, we encountered calibration issues and recalibrated the soil sensor several times to find a range that produced more reasonable readings. Some later fluctuations and saturated wetness values therefore reflect calibration adjustments as well as changes in soil conditions. They should not all be interpreted as changes in the plant itself. Isolated sensor anomalies also require separate investigation.</p>
+    <p>Despite the shared Grafana problem near submission, the available stored history supports that PlantCare was functioning and collecting telemetry over time. The local view provides supporting evidence of that workflow, with the data gaps and calibration limitations made explicit.</p>
+    <p class="source">The shared-environment issue, connection observations, and recalibration timeline are the team's account. The 29 October start is supported by the final report's separate audit. The underlying full historical dataset was not independently re-audited for this offline page.</p>
   </section>
-  <section id="gaps">
-    <h2>Historical data availability</h2>
-    <p>The two-day capture shows a thermal telemetry gap around midday on 4 November while soil telemetry continues. The labels summarize gaps between received samples; they do not directly measure Wi-Fi status or identify which component failed.</p>
-    <figure><a href="assets/grafana-two-days.png"><img src="assets/grafana-two-days.png" alt="Saved two-day timeline with a thermal data gap while soil readings continue"></a><figcaption>Original project image: grafana-two-days.png. A gap longer than 180 seconds is marked as disconnected by the historical rule.</figcaption></figure>
-  </section>
-  <footer><p class="source">Source: the supplied PlantCare final-report figures and manuscript. No live requests, external fonts, scripts, or services are needed. For live monitoring, configure Node-RED, InfluxDB, and one of the Grafana dashboard JSON files.</p></footer>
+  <footer><p class="source">Source: the supplied PlantCare final-report overview, manuscript, and local recovered-dashboard screenshot, with the team's account of the recovery and calibration timeline. No live requests, external fonts, scripts, or services are needed. For live monitoring, configure Node-RED, InfluxDB, and one of the Grafana dashboard JSON files.</p></footer>
 </main></body>
 </html>
